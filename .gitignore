@@ -1,0 +1,6 @@
+*.pyc
+.irkrc
+bin/*
+dist/*
+build/*
+irk.egg-info/*
