@@ -22,7 +22,7 @@ Refer to the LICENSE file before using Irk.
 
 #### Running after installation.
 `$ irk`   
-(`CTRL+D` to safely quit)
+(`CTRL+C` to safely quit)
                                      
 #### Uninstalling                                                                                           
 `$ pip uninstall irk`                                

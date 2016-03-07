@@ -7,8 +7,7 @@ import datetime
 # Python comments or blank lines before the __future__ line.
 
 
-#Rename for more generic printlog
-def log(message, file, t='SIMPLE', printout=True, nolog=False):
+def log(message, file=None, t='SIMPLE', silent=False):
     if t == 'SIMPLE':
         message = "   | {0}".format(message)
     elif t == 'SEND':
@@ -22,9 +21,11 @@ def log(message, file, t='SIMPLE', printout=True, nolog=False):
     elif t == 'INFO':
         message = " O | {0}".format(message)
 
-    if printout:
+    if not silent:
         print message
-    file.write("{0}\n".format(message))
+
+    if file is not None:
+	file.write("{0}\n".format(message))
 
 
 def cwdopen(filename, mode='r'):
@@ -44,7 +45,8 @@ def cwdopen(filename, mode='r'):
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', type=str, help="Configuration file. defaults to: \'~/.irk\'")
-    args = parser.parse_args()
+    #parser.add_argument(''
+    #args = parser.parse_args()
     return args
 
 def timestamp():

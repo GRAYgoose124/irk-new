@@ -16,9 +16,10 @@
 import irc
 
 def main():
- client = irc.IrcClient()
+ client = irc.IrcClient(".irk")
  try:
     client.start()
+    #client.bot(Bot())
  except KeyboardInterrupt:
-    print "| Interrupted."
+    print " | User interrupted."
     client.stop()

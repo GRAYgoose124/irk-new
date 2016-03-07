@@ -18,60 +18,102 @@ import ssl
 import re
 import json
 import os
+import readline
+import getpass
 
 from utils import cwdopen, log, timestamp
 
-default_config = """{
-  "host": "irc.foonetic.net",
-  "port": "6697",
-  "nick": "bot",
-  "pass": "None",
-  "ident": "None",
-  "user": "None",
-  "mode": "+B",
-  "unused": "None",
-  "owner": "None",
-  "logging": "True",
-  "log_file": "foonetic"
-}"""
 
-# TODO: Move and compile all regexes.
+# log file should be given from the caller on init
+default_config = {
+    'host': 'irc.foonetic.net',
+    'port': 7001,
+    'nick': '',
+    'pass': '',
+    'ident': '',
+    'user': '',
+    "mode": '+B',
+    "unused": '*',
+    "owner": '',
+    "logging": True,
+    "channels": []
+ }
+
+# TODO: Move and compile all regexes. Better logging, more commenting, so much...
+# TODO: Code is really monolithic, many things could be broken down...
 class IrcClient:
-    def __init__(self, path=".irk", putinhome=True):
-        if putinhome == True:
-            home = os.path.expanduser("~")
+    def __init__(self, homedir, interactive=True):
+        # Find (make) irc client home directory
+        if not os.path.isabs(homedir):
+            root = os.path.expanduser("~")
         else:
-            home = ''
+            root = ''
 
-        self.path = os.path.join(home, path)
-        if not os.path.exists(self.path):
-            os.mkdir(self.path)
+        self.homedir = os.path.join(root, homedir)
+        self.folders = ["plugins", "logs"]
 
-        # TODO: plugins, live reload
-        if not os.path.exists(os.path.join(self.path, "config")):
-            self.config = self.gen_config()
-            with cwdopen(os.path.join(self.path, "config"), 'w+') as file:
-                file.write(self.config)
+        if not os.path.exists(self.homedir):
+            os.makedirs(self.homedir)
 
-        with cwdopen(os.path.join(self.path, "config"), 'r') as file:
+        for i, folder in enumerate(self.folders):
+            self.folders[i] = os.path.join(self.homedir, folder)
+            if not os.path.exists(self.folders[i]):
+                os.mkdir(self.folders[i])
+
+        # Create, open and check the configuration file. TODO: More robust, break down
+        # It assumes existing files are valid... Lots of bad things.
+        config_file = os.path.join(self.homedir, "config")
+        if not os.path.exists(config_file):
+            with cwdopen(config_file, 'w') as file:
+                json.dump(default_config, file, indent=2)
+
+        with cwdopen(config_file, 'r') as file:
             self.config = json.load(file)
 
+        changed = False
+        for key, value in self.config.iteritems():
+            if value is None or value == '':
+                changed = True
+                self.config[key] = str(raw_input("CLI| {}: ".format(key)))
+            if key == 'pass' and value == '':
+                self.config[key] = getpass.getpass("CLI| pass: ")
+            if key == 'channels' and value == []:
+                changed = True
+                print "CLI| To finish, enter DONE."
+                while i != "DONE":
+                    i = str(raw_input("CLI| channel: "))
+                    if i[0] == '#':
+                        self.config[key].append(i)
+
+        if changed:
+            with cwdopen(config_file, 'w') as file:
+                json.dump(self.config, file, indent=2)
+
+        # Handle logging.
         if bool(self.config['logging']):
-            self.log_file = cwdopen(os.path.join(self.path, "{0}.log".format(self.config['log_file'])), 'a+')
+            log_file = os.path.join(self.homedir, self.folders[1],
+                                    "{0}.log".format(self.config['host']))
+            self.log_file = cwdopen(log_file, 'a+')
+        else:
+            self.log_file = None
+
+        # TODO: Load plugins (live reload)
 
         self.sock = None
 
-    def gen_config(self, prompt=False):
-        return default_config
+    def save_config(self, data, file):
+        pass
 
     def start(self):
         self.init_socket()
         self.sock.connect((self.config['host'], int(self.config['port'])))
 
         ssl_info = self.sock.cipher()
-        if ssl_info:
-            log("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), self.log_file, 'INFO')
+        #if ssl_info:
+            #log("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), self.log_file, 'INFO')
 
+        # IRC RFC2812:3.1 states that a client needs to send a nick and
+        # user message in order to register a connection.
         self.nick()
         self.user()
 
@@ -90,11 +132,14 @@ class IrcClient:
     def txrx_loop(self):
         """Transmit/Receive loop"""
         while True:
-            data = self.sock.recv(8168)
+            # Get a raw 4kb chunk of data from the socket.
+            data = self.sock.recv(4096)
             if not data:
                 log("No more data... Connection closed.", self.log_file, 'ERROR')
                 break
 
+            # IRC RFC2812:2.3 states IRC messages always end with '\r\n'
+            # Split the data into the IRC message sit contains.
             messages = data.split('\r\n')
             for message in messages:
                 if message:
@@ -107,18 +152,15 @@ class IrcClient:
         """Process IRC messages."""
         prefix, command, params = None, None, None
 
-        try:
-            if message[0] == ':':
-                prefix, msg = message.split(' ', 1)
-                if ' ' in msg:
-                    command, params = msg.split(' ', 1)
-                else:
-                    command = msg
-                    params = None
+        if message[0] == ':':
+            prefix, msg = message.split(' ', 1)
+            if ' ' in msg:
+                command, params = msg.split(' ', 1)
             else:
-                command, params = message.split(' ', 1)
-        except ValueError as e:
-            log("{0}: {1}".format(repr(e), message), self.log_file, 'ERROR')
+                command = msg
+                params = None
+        else:
+            command, params = message.split(' ', 1)
 
         log("{0}".format(message), self.log_file, 'RECEIVE')
 
@@ -128,7 +170,8 @@ class IrcClient:
             self.msg("PONG {0}".format(params))
         elif command == 'MODE':
             if prefix.lower() == ':nickserv':
-                self.join("#freesoftware")
+                for channel in self.config['channels']:
+                    self.join(channel)
         elif command == 'PRIVMSG':
             self.process_privmsg(prefix, params)
         elif command == 'NOTICE':
@@ -152,7 +195,8 @@ class IrcClient:
 
         # Reply to CTCP PINGS
         if command == '\x01PING':
-            self.notice_ping(sender_nick, "{0} {1}".format(tokens[2], tokens[3][:-1]))
+            self.notice_ping(sender_nick, "{0} {1}".format(tokens[2],
+                                                           tokens[3][:-1]))
 
         # Protected cmds TODO: Add privileges
         elif sender_nick == self.config['owner']:
@@ -167,8 +211,8 @@ class IrcClient:
     # IRC Messages
     def msg(self, message):
         self.sock.send("{0}\r\n".format(message))
-        message = re.sub("NICKSERV :IDENTIFY .*",
-                         "NICKSERV :IDENTIFY <password>", message)
+        message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
+                         message)
         log("{0}".format(message), self.log_file, 'SEND')
 
     # Refactor notice and privmsg out or fix how ctcp calls them...
@@ -182,22 +226,27 @@ class IrcClient:
         self.msg("NICK {0}".format(self.config['nick']))
 
     def user(self):
+        print self.config
         self.msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
-                                                      self.config['unused'],
-                                                      self.config['owner']))
+                                               self.config['unused'],
+                                               self.config['owner']))
 
     def mode(self):
         self.msg("MODE {0} {1}".format(self.config['nick'],
-                                              self.config['mode']))
+                                       self.config['mode']))
     def join(self, channel):
         self.msg("JOIN {0}".format(channel))
 
     def quit(self, quit_msg='Quitting'):
         self.msg("QUIT :{0}".format(quit_msg))
 
+    def register(self):
+        self.privmsg("NICKSERV",
+                     "REGISTER {0} {1}".format(self.config['owner_email'],
+                                               self.config['pass']))
     def identify(self):
         self.privmsg("NICKSERV",
-                            "IDENTIFY {0}".format(self.config['pass']))
+                     "IDENTIFY {0}".format(self.config['pass']))
 
     # TODO: SRSLY FIX THIS SHIT / PING TOO
     def ctcp(self, msg_func, destination, message):
@@ -206,7 +255,8 @@ class IrcClient:
     def privmsg_ping(self, destination):
         #Time the time it takes to receive pong
         time = str(timestamp())
-        self.ctcp(self.privmsg, destination, "PING {0} {1}".format(time[:10], time[10:]))
+        self.ctcp(self.privmsg, destination,
+                  "PING {0} {1}".format(time[:10], time[10:]))
 
     def notice_ping(self, destination, params):
         self.ctcp(self.notice, destination, "PING {0}".format(params))
