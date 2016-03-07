@@ -39,11 +39,22 @@ default_config = {
     "channels": []
  }
 
+# TODO: Fix logger, it's not good practice to wrap print, this one is inconsistent
+# and far too intertwined.
+
+# TODO: Make the parts more modular, no need for hacked together parts..
+# TODO: 
+
+
 # TODO: Move and compile all regexes. Better logging, more commenting, so much...
 # TODO: Code is really monolithic, many things could be broken down...
+# eventually __init__() should only have methods in it...for good modularity
 class IrcClient:
     def __init__(self, homedir, interactive=True):
-        # Find (make) irc client home directory
+        self.sock = None
+
+        # Find (make) irc client home directory as well as its subfolders
+        # Offload this to a tree_init function
         if not os.path.isabs(homedir):
             root = os.path.expanduser("~")
         else:
@@ -71,8 +82,11 @@ class IrcClient:
             self.config = json.load(file)
 
         changed = False
+
+        # I could wrap the input in a try/except case and check for valueerrors to force
+        # correct values #TODO move whole configuration code out of class
         for key, value in self.config.iteritems():
-            if value is None or value == '':
+            if value is None or value == '' and key != 'pass':
                 changed = True
                 self.config[key] = str(raw_input("CLI| {}: ".format(key)))
             if key == 'pass' and value == '':
@@ -89,7 +103,7 @@ class IrcClient:
             with cwdopen(config_file, 'w') as file:
                 json.dump(self.config, file, indent=2)
 
-        # Handle logging.
+        # Handle logging. TODO: Offload to Logging, separate from calss
         if bool(self.config['logging']):
             log_file = os.path.join(self.homedir, self.folders[1],
                                     "{0}.log".format(self.config['host']))
@@ -99,9 +113,7 @@ class IrcClient:
 
         # TODO: Load plugins (live reload)
 
-        self.sock = None
-
-    def save_config(self, data, file):
+    def init_config(self, data, file):
         pass
 
     def start(self):
@@ -109,8 +121,8 @@ class IrcClient:
         self.sock.connect((self.config['host'], int(self.config['port'])))
 
         ssl_info = self.sock.cipher()
-        #if ssl_info:
-            #log("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), self.log_file, 'INFO')
+        if ssl_info:
+            log("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), self.log_file, 'INFO')
 
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
@@ -226,7 +238,6 @@ class IrcClient:
         self.msg("NICK {0}".format(self.config['nick']))
 
     def user(self):
-        print self.config
         self.msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
                                                self.config['unused'],
                                                self.config['owner']))

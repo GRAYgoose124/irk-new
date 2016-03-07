@@ -30,7 +30,7 @@ def log(message, file=None, t='SIMPLE', silent=False):
 
 def cwdopen(filename, mode='r'):
     """Check whether to prepend the CWD or not based on the filename."""
-    print " ! | Opened file {0} with {1} permissions.".format(filename, mode)
+    print " ! | Opened file {0} with '{1}' permissions.".format(filename, mode)
 
     try:
         if os.path.isabs(filename):
