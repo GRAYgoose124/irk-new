@@ -23,31 +23,95 @@ import logging
 import sys
 
 from utils import cwdopen, pretty, timestamp
-import irchelpers
+import irctools
 
-# TODO: Move and compile all regexes. Better logging, more commenting, etc
-# TODO: Code is really monolithic, many things could be broken down...
-# eventually __init__() should only have methods in it...for good modularity
-# Almost everything in here can go into __main__.py
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stdout))
-    
-class IrcClient():
+
+class IrcProtocol:
+    def __init__(config):
+        raise NotImplementedError("{0}.{1}".format(self.__class__.name__, "__init__()"))
+
+    def _init_socket(self):
+        self.sock = None
+
+        if self.config['ipv6']:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.sock = ssl.wrap_socket(sock)
+        self.sock.connect((self.config['host'], int(self.config['port'])))
+
+    # IRC Messages
+    def _msg(self, message):
+        self.sock.send("{0}\r\n".format(message))
+        message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
+                         message)
+        logger.info(pretty(message, 'SEND'))
+
+    def _notice(self, destination, message):
+        self._msg("NOTICE {0} :{1}".format(destination, message))
+
+    def _privmsg(self, destination, message):
+        self._msg("PRIVMSG {0} :{1}".format(destination, message))
+
+    def _nick(self):
+        self._msg("NICK {0}".format(self.config['nick']))
+
+    def _user(self):
+        self._msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
+                                               self.config['unused'],
+                                               self.config['owner']))
+
+    def _mode(self):
+        self._msg("MODE {0} {1}".format(self.config['nick'],
+                                       self.config['mode']))
+    def join(self, channel):
+        self._msg("JOIN {0}".format(channel))
+
+    def _quit(self, quit_msg='Quitting'):
+        self._msg("QUIT :{0}".format(quit_msg))
+
+    def _register(self):
+        self._privmsg("NICKSERV",
+                     "REGISTER {0} {1}".format(self.config['owner_email'],
+                                               self.config['pass']))
+    def _identify(self):
+        self._privmsg("NICKSERV",
+                     "IDENTIFY {0}".format(self.config['pass']))
+
+    def _wrap_ctcp(self, destination, message):
+        return destination, "\x01{0}\x01".format(message)
+
+    def _privmsg_ping(self, destination):
+        # self.waitingforpong = True, then in loop if self, etc to time
+        time = str(timestamp())
+        self._privmsg(self._wrap_ctcp(destination,
+                                    "PING {0} {1}".format(time[:10],
+                                                          time[10:])))
+
+    def _notice_ping(self, destination, params):
+        self._notice(self._wrap_ctcp(destination, "PING {0}".format(params)))
+
+
+# TODO Sort into channels/queries in client or bot? buffer? log it.
+class IrcClient(IrcProtocol):
     def __init__(self, directory, config, interactive=True):
         self.homedir = directory
         self.config = config
 
         # Validate configuration.
         isvalid = True
-        for key, value in irchelpers.required_irc_config.iteritems():
+        for key, value in irctools.required_irc_config.iteritems():
             if key not in self.config:
                 isvalid = False
                 logger.error("Missing key: %s", key)
         if not isvalid:
             raise ValueError("Required keys missing from configuration.")
         # TODO: channels/queries 
-                        
+
     def start(self):
         self._init_socket()
 
@@ -68,16 +132,6 @@ class IrcClient():
         self._quit()
         self.sock.close()
 
-    def _init_socket(self):
-        self.sock = None
-
-        if self.config['ipv6']:
-            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
-        else:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        self.sock = ssl.wrap_socket(sock)
-        self.sock.connect((self.config['host'], int(self.config['port'])))
 
     # Thread receive loop
     def _loop(self):
@@ -163,75 +217,10 @@ class IrcClient():
             logger.debug("Missing command: {}".format(command))
 
     def _proc_notice(self, prefix, params):
-        pass
-        #raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_notice()")) 
+        raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_notice()")) 
 
-    #def _proc_privmsg(self, sender_nick, command, params):
-    #    raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_privmsg()"))
     def _proc_privmsg(self, sender_nick, command, params):
-        # SORT data into queries and channels
-        # Put into dict/hash O(n) search...
-        # TODO: Yield data to bot so the bot can asyncronously process it.
-        # TODO: Offload to Bot class. Add more commands. (privileges,etc) (in plugins)
-        if sender_nick == self.config['owner']:
-            if command  ==  '!quit':
-                self._quit()
-            elif command == '!join':
-                if params[0] == '#':
-                    self.join(params[0])
-            elif command == '!ping':
-                if len(tokens) > 2:
-                    self._privmsg_ping(tokens[2])
-                else:
-                    self._privmsg_ping(sender_nick)
-            
-    # IRC Messages
-    def _msg(self, message):
-        self.sock.send("{0}\r\n".format(message))
-        message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
-                         message)
-        logger.info(pretty(message, 'SEND'))
+        raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_privmsg()"))
 
-    def _notice(self, destination, message):
-        self._msg("NOTICE {0} :{1}".format(destination, message))
 
-    def _privmsg(self, destination, message):
-        self._msg("PRIVMSG {0} :{1}".format(destination, message))
 
-    def _nick(self):
-        self._msg("NICK {0}".format(self.config['nick']))
-
-    def _user(self):
-        self._msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
-                                               self.config['unused'],
-                                               self.config['owner']))
-
-    def _mode(self):
-        self._msg("MODE {0} {1}".format(self.config['nick'],
-                                       self.config['mode']))
-    def join(self, channel):
-        self._msg("JOIN {0}".format(channel))
-
-    def _quit(self, quit_msg='Quitting'):
-        self._msg("QUIT :{0}".format(quit_msg))
-
-    def _register(self):
-        self._privmsg("NICKSERV",
-                     "REGISTER {0} {1}".format(self.config['owner_email'],
-                                               self.config['pass']))
-    def _identify(self):
-        self._privmsg("NICKSERV",
-                     "IDENTIFY {0}".format(self.config['pass']))
-
-    def _wrap_ctcp(self, destination, message):
-        return destination, "\x01{0}\x01".format(message)
-
-    def _privmsg_ping(self, destination):
-        # self.waitingforpong = True, then in loop if self, etc to time
-        time = str(timestamp())
-        self._privmsg(self._wrap_ctcp(destination,
-                                    "PING {0} {1}".format(time[:10],
-                                                          time[10:])))
-
-    def _notice_ping(self, destination, params):
-        self._notice(self._wrap_ctcp(destination, "PING {0}".format(params)))

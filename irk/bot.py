@@ -16,8 +16,11 @@
 
 import irc
 
-class IrcBot(IrcClient):
-    def __init__():
+# TODO: Plugins
+# TODO: Dict/Hash efficient lookup
+
+class IrcBot(irc.IrcClient):
+    def _proc_notice(self, prefix, params):
         pass
 
     def _proc_privmsg(self, sender_nick, command, params):
