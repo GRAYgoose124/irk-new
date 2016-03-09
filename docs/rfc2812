@@ -540,10 +540,7 @@ RFC 2812          Internet Relay Chat: Client Protocol        April 2000
    Example:
 
            PASS secretpasswordhere
-
 3.1.2 Nick message
-
-
       Command: NICK
    Parameters: <nickname>
 

@@ -1,36 +1,46 @@
+#   Irk: irc bot
+#   Copyright (C) 2016  Grayson Miller
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU Affero General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU Affero General Public License for more details.
+#
+#   You should have received a copy of the GNU Affero General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import argparse
 import os
 import datetime
+import logging
 
-# This must be the first statement before other statements.
-# You may only put a quoted or triple quoted string,
-# Python comments or blank lines before the __future__ line.
+logger = logging.getLogger(__name__)
 
 
-def log(message, file=None, t='SIMPLE', silent=False):
+def pretty(message, t='SIMPLE'):
+    m = None
     if t == 'SIMPLE':
-        message = "   | {0}".format(message)
+        m = "   | {0}"
     elif t == 'SEND':
-        message = "<--| {0}".format(message)
+        m = "<--| {0}"
     elif t == 'RECEIVE':
-        message = "-->| {0}".format(message)
-    elif t == 'ERROR':
-        message = " X | {0}".format(message)
-    elif t == 'SYSINFO':
-        message = " ! | {0}".format(message)
+        m = "-->| {0}"
     elif t == 'INFO':
-        message = " O | {0}".format(message)
-
-    if not silent:
-        print message
-
-    if file is not None:
-	file.write("{0}\n".format(message))
-
+        m = " O | {0}"
+    elif t == 'CLI':
+        m = "CLI| {0}"
+    elif t == 'ERROR':
+        m = "ERR| {0}"
+        
+    return m.format(message)
 
 def cwdopen(filename, mode='r'):
     """Check whether to prepend the CWD or not based on the filename."""
-    print " ! | Opened file {0} with '{1}' permissions.".format(filename, mode)
+    logger.debug("Opened file {0} with '{1}' permissions.".format(filename, mode))
 
     try:
         if os.path.isabs(filename):
@@ -38,16 +48,18 @@ def cwdopen(filename, mode='r'):
         else:
             return open(os.path.join(os.getcwd(), filename), mode)
     except IOError as e:
-        print("EXC| Error: file not found.")
+        logger.error("File not found.")
         return None
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str, help="Configuration file. defaults to: \'~/.irk\'")
+    parser.add_argument('-c', type=str,
+                        help="Configuration file. defaults to: \'~/.irk\'")
     #parser.add_argument(''
     #args = parser.parse_args()
     return args
 
 def timestamp():
-    return int((datetime.datetime.utcnow() - datetime.datetime(1970, 1, 1)).total_seconds() * 1000)
+    return int((datetime.datetime.utcnow()
+                - datetime.datetime(1970, 1, 1)).total_seconds() * 1000)

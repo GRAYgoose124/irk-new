@@ -19,40 +19,31 @@ import re
 import json
 import os
 import readline
+import rlcompleter
 import getpass
+import logging
 
-from utils import cwdopen, log, timestamp
+from utils import cwdopen, pretty, timestamp
 
-
-# log file should be given from the caller on init
 default_config = {
-    'host': 'irc.foonetic.net',
-    'port': 7001,
-    'nick': '',
-    'pass': '',
-    'ident': '',
-    'user': '',
-    "mode": '+B',
-    "unused": '*',
-    "owner": '',
-    "logging": True,
-    "channels": []
+    'host': 'irc.foonetic.net', 'port': 7001, 'ipv6': False,
+    'nick': '', 'pass': '',
+    'ident': '', 'user': '',
+    'mode': '+B', 'unused': '*',
+    'owner': '',
+    'channels': [],
+    'logging': True, 'log_level': 'DEBUG'
  }
 
-# TODO: Fix logger, it's not good practice to wrap print, this one is inconsistent
-# and far too intertwined.
-
 # TODO: Make the parts more modular, no need for hacked together parts..
-# TODO: 
+# TODO:
 
 
-# TODO: Move and compile all regexes. Better logging, more commenting, so much...
+# TODO: Move and compile all regexes. Better logging, more commenting, etc
 # TODO: Code is really monolithic, many things could be broken down...
 # eventually __init__() should only have methods in it...for good modularity
 class IrcClient:
     def __init__(self, homedir, interactive=True):
-        self.sock = None
-
         # Find (make) irc client home directory as well as its subfolders
         # Offload this to a tree_init function
         if not os.path.isabs(homedir):
@@ -85,17 +76,18 @@ class IrcClient:
 
         # I could wrap the input in a try/except case and check for valueerrors to force
         # correct values #TODO move whole configuration code out of class
+        # Check for interactivity
         for key, value in self.config.iteritems():
             if value is None or value == '' and key != 'pass':
                 changed = True
-                self.config[key] = str(raw_input("CLI| {}: ".format(key)))
+                self.config[key] = str(raw_input(pretty("{}: ".format(key), 'CLI')))
             if key == 'pass' and value == '':
-                self.config[key] = getpass.getpass("CLI| pass: ")
+                self.config[key] = getpass.getpass(pretty("pass: ", 'CLI'))
             if key == 'channels' and value == []:
                 changed = True
-                print "CLI| To finish, enter DONE."
+                print pretty("To finish, enter DONE.", 'CLI')
                 while i != "DONE":
-                    i = str(raw_input("CLI| channel: "))
+                    i = str(raw_input(pretty("channel: ", 'CLI')))
                     if i[0] == '#':
                         self.config[key].append(i)
 
@@ -104,17 +96,36 @@ class IrcClient:
                 json.dump(self.config, file, indent=2)
 
         # Handle logging. TODO: Offload to Logging, separate from calss
-        if bool(self.config['logging']):
-            log_file = os.path.join(self.homedir, self.folders[1],
-                                    "{0}.log".format(self.config['host']))
-            self.log_file = cwdopen(log_file, 'a+')
-        else:
-            self.log_file = None
-
+        self.init_logging()
         # TODO: Load plugins (live reload)
 
-    def init_config(self, data, file):
+    def init_config(self):
         pass
+
+    def init_logging(self):
+        self.logger = None
+        if bool(self.config['logging']):
+            log_level = None
+            log_file = os.path.join(self.homedir, self.folders[1],
+                                    "{0}.log".format(self.config['host'].split('.')[1]))
+
+            if 'log_level' not in self.config:
+                log_level = logging.INFO
+            else:
+                ll = self.config['log_level']
+                if ll == "DEBUG":
+                    log_level = logging.DEBUG
+                elif ll == "INFO":
+                    log_level = logging.INFO
+                elif ll == "WARNING":
+                    log_level = logging.WARNING
+                elif ll == "ERROR":
+                    log_level = logging.ERROR
+                elif ll == "CRITICAL":
+                    log_level = logging.CRITICAL
+
+            logging.basicConfig(filename=log_file, filemode='a+', level=log_level)
+            self.logger = logging.getLogger(self.__class__.__name__)
 
     def start(self):
         self.init_socket()
@@ -122,8 +133,10 @@ class IrcClient:
 
         ssl_info = self.sock.cipher()
         if ssl_info:
-            log("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), self.log_file, 'INFO')
-
+            m = pretty("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), 'INFO')
+            print m
+            if self.logger:
+                self.logger.info(m)
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
         self.nick()
@@ -134,11 +147,15 @@ class IrcClient:
     def stop(self):
         self.quit()
         self.sock.close()
-        self.log_file.close()
 
     def init_socket(self):
+        self.sock = None
         """Initialize the socket connection."""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if self.config['ipv6']:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         self.sock = ssl.wrap_socket(sock)
 
     def txrx_loop(self):
@@ -147,7 +164,10 @@ class IrcClient:
             # Get a raw 4kb chunk of data from the socket.
             data = self.sock.recv(4096)
             if not data:
-                log("No more data... Connection closed.", self.log_file, 'ERROR')
+                if self.logger:
+                    m = pretty("No more data... Connection closed.", 'ERROR')
+                    print m
+                    self.logger.error(m)
                 break
 
             # IRC RFC2812:2.3 states IRC messages always end with '\r\n'
@@ -157,7 +177,6 @@ class IrcClient:
                 if message:
                     self.process_msg(message)
 
-            self.log_file.flush()
         self.sock.close()
 
     def process_msg(self, message):
@@ -170,11 +189,14 @@ class IrcClient:
                 command, params = msg.split(' ', 1)
             else:
                 command = msg
-                params = None
         else:
             command, params = message.split(' ', 1)
 
-        log("{0}".format(message), self.log_file, 'RECEIVE')
+        # TODO: check interactive? Work on interactive/nohead modes
+        m = pretty(message, 'RECEIVE')
+        print(m)
+        if self.logger:
+            self.logger.info(m)
 
         # TODO: Sort for performance?
         # clean up command parsing
@@ -195,7 +217,7 @@ class IrcClient:
                 self.identify()
         elif command == '433':
             if re.match(":Nickname is already in use", params) is not None:
-                self.config['nick'] = '_' + self.config['nick']
+                self.config['nick'] = "_{}".format(self.config['nick'])
                 self.mode()
 
     # TODO: Offload to Bot class. Add more commands.
@@ -225,7 +247,10 @@ class IrcClient:
         self.sock.send("{0}\r\n".format(message))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
                          message)
-        log("{0}".format(message), self.log_file, 'SEND')
+        m = pretty(message, 'SEND')
+        print m
+        if self.logger:
+            self.logger.info(m)
 
     # Refactor notice and privmsg out or fix how ctcp calls them...
     def notice(self, destination, message):

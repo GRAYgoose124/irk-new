@@ -29,6 +29,7 @@ config = {
         'console_scripts': [
             'irk = irk.__main__:main'
         ]
+    }
 }
 
 setup(**config)
