@@ -43,15 +43,28 @@ default_config = {
 # TODO: Code is really monolithic, many things could be broken down...
 # eventually __init__() should only have methods in it...for good modularity
 class IrcClient:
-    def __init__(self, homedir, interactive=True):
-        # Find (make) irc client home directory as well as its subfolders
-        # Offload this to a tree_init function
-        if not os.path.isabs(homedir):
+    def __init__(self, directory, interactive=True):
+        # Find (make) irc client home directory as well as its subfolders.
+        self.init_homedir(directory)
+
+        # Create, open and check the configuration file. TODO: More robust, break down
+        # It assumes existing files are valid... Lots of bad things
+        self.init_config()
+        
+        # So far logging will only support one file per class, needs to be
+        # one file per server. Plus, for regular IRC activity, logging should be
+        # plain. I don't think I should use logging library for that.
+        self.init_logging()
+
+        # TODO: Load plugins (live reload)
+
+    def init_homedir(self, directory):
+        if not os.path.isabs(directory):
             root = os.path.expanduser("~")
         else:
             root = ''
 
-        self.homedir = os.path.join(root, homedir)
+        self.homedir = os.path.join(root, directory)
         self.folders = ["plugins", "logs"]
 
         if not os.path.exists(self.homedir):
@@ -60,10 +73,9 @@ class IrcClient:
         for i, folder in enumerate(self.folders):
             self.folders[i] = os.path.join(self.homedir, folder)
             if not os.path.exists(self.folders[i]):
-                os.mkdir(self.folders[i])
-
-        # Create, open and check the configuration file. TODO: More robust, break down
-        # It assumes existing files are valid... Lots of bad things.
+                os.mkdir(self.folders[i])        
+    
+    def init_config(self):
         config_file = os.path.join(self.homedir, "config")
         if not os.path.exists(config_file):
             with cwdopen(config_file, 'w') as file:
@@ -94,20 +106,14 @@ class IrcClient:
         if changed:
             with cwdopen(config_file, 'w') as file:
                 json.dump(self.config, file, indent=2)
-
-        # Handle logging. TODO: Offload to Logging, separate from calss
-        self.init_logging()
-        # TODO: Load plugins (live reload)
-
-    def init_config(self):
-        pass
-
+                
     def init_logging(self):
         self.logger = None
         if bool(self.config['logging']):
             log_level = None
+            server_name = self.config['host'].split('.')[1]
             log_file = os.path.join(self.homedir, self.folders[1],
-                                    "{0}.log".format(self.config['host'].split('.')[1]))
+                                    "{0}.log".format(server_name))
 
             if 'log_level' not in self.config:
                 log_level = logging.INFO
@@ -124,8 +130,9 @@ class IrcClient:
                 elif ll == "CRITICAL":
                     log_level = logging.CRITICAL
 
-            logging.basicConfig(filename=log_file, filemode='a+', level=log_level)
-            self.logger = logging.getLogger(self.__class__.__name__)
+            logging.basicConfig(level=log_level)
+            self.logger = logging.getLogger("irc")
+            self.logger.addHandler(logging.FileHandler(log_file, 'a+'))
 
     def start(self):
         self.init_socket()
@@ -134,9 +141,10 @@ class IrcClient:
         ssl_info = self.sock.cipher()
         if ssl_info:
             m = pretty("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), 'INFO')
-            print m
             if self.logger:
                 self.logger.info(m)
+            else:
+                print m
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
         self.nick()
@@ -164,10 +172,11 @@ class IrcClient:
             # Get a raw 4kb chunk of data from the socket.
             data = self.sock.recv(4096)
             if not data:
+                m = pretty("No more data... Connection closed.", 'ERROR')
                 if self.logger:
-                    m = pretty("No more data... Connection closed.", 'ERROR')
-                    print m
                     self.logger.error(m)
+                else:
+                    print m
                 break
 
             # IRC RFC2812:2.3 states IRC messages always end with '\r\n'
@@ -194,9 +203,11 @@ class IrcClient:
 
         # TODO: check interactive? Work on interactive/nohead modes
         m = pretty(message, 'RECEIVE')
-        print(m)
+
         if self.logger:
             self.logger.info(m)
+        else:
+            print m
 
         # TODO: Sort for performance?
         # clean up command parsing
@@ -248,9 +259,10 @@ class IrcClient:
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
                          message)
         m = pretty(message, 'SEND')
-        print m
         if self.logger:
             self.logger.info(m)
+        else:
+            print m
 
     # Refactor notice and privmsg out or fix how ctcp calls them...
     def notice(self, destination, message):
