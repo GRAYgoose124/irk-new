@@ -20,7 +20,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 def pretty(message, t='SIMPLE'):
     m = None
     if t == 'SIMPLE':
@@ -33,9 +32,8 @@ def pretty(message, t='SIMPLE'):
         m = " O | {0}"
     elif t == 'CLI':
         m = "CLI| {0}"
-    elif t == 'ERROR':
-        m = "ERR| {0}"
-        
+    elif t == 'SYSINFO':
+        m = " ! | {0}"
     return m.format(message)
 
 def cwdopen(filename, mode='r'):
@@ -50,15 +48,6 @@ def cwdopen(filename, mode='r'):
     except IOError as e:
         logger.error("File not found.")
         return None
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str,
-                        help="Configuration file. defaults to: \'~/.irk\'")
-    #parser.add_argument(''
-    #args = parser.parse_args()
-    return args
 
 def timestamp():
     return int((datetime.datetime.utcnow()

@@ -16,167 +16,77 @@
 import socket
 import ssl
 import re
-import json
-import os
 import readline
 import rlcompleter
 import getpass
 import logging
+import sys
 
 from utils import cwdopen, pretty, timestamp
-
-default_config = {
-    'host': 'irc.foonetic.net', 'port': 7001, 'ipv6': False,
-    'nick': '', 'pass': '',
-    'ident': '', 'user': '',
-    'mode': '+B', 'unused': '*',
-    'owner': '',
-    'channels': [],
-    'logging': True, 'log_level': 'DEBUG'
- }
-
-# TODO: Make the parts more modular, no need for hacked together parts..
-# TODO:
-
+import irchelpers
 
 # TODO: Move and compile all regexes. Better logging, more commenting, etc
 # TODO: Code is really monolithic, many things could be broken down...
 # eventually __init__() should only have methods in it...for good modularity
-class IrcClient:
-    def __init__(self, directory, interactive=True):
-        # Find (make) irc client home directory as well as its subfolders.
-        self.init_homedir(directory)
+# Almost everything in here can go into __main__.py
 
-        # Create, open and check the configuration file. TODO: More robust, break down
-        # It assumes existing files are valid... Lots of bad things
-        self.init_config()
-        
-        # So far logging will only support one file per class, needs to be
-        # one file per server. Plus, for regular IRC activity, logging should be
-        # plain. I don't think I should use logging library for that.
-        self.init_logging()
-
-        # TODO: Load plugins (live reload)
-
-    def init_homedir(self, directory):
-        if not os.path.isabs(directory):
-            root = os.path.expanduser("~")
-        else:
-            root = ''
-
-        self.homedir = os.path.join(root, directory)
-        self.folders = ["plugins", "logs"]
-
-        if not os.path.exists(self.homedir):
-            os.makedirs(self.homedir)
-
-        for i, folder in enumerate(self.folders):
-            self.folders[i] = os.path.join(self.homedir, folder)
-            if not os.path.exists(self.folders[i]):
-                os.mkdir(self.folders[i])        
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler(sys.stdout))
     
-    def init_config(self):
-        config_file = os.path.join(self.homedir, "config")
-        if not os.path.exists(config_file):
-            with cwdopen(config_file, 'w') as file:
-                json.dump(default_config, file, indent=2)
+class IrcClient():
+    def __init__(self, directory, config, interactive=True):
+        self.homedir = directory
+        self.config = config
 
-        with cwdopen(config_file, 'r') as file:
-            self.config = json.load(file)
-
-        changed = False
-
-        # I could wrap the input in a try/except case and check for valueerrors to force
-        # correct values #TODO move whole configuration code out of class
-        # Check for interactivity
-        for key, value in self.config.iteritems():
-            if value is None or value == '' and key != 'pass':
-                changed = True
-                self.config[key] = str(raw_input(pretty("{}: ".format(key), 'CLI')))
-            if key == 'pass' and value == '':
-                self.config[key] = getpass.getpass(pretty("pass: ", 'CLI'))
-            if key == 'channels' and value == []:
-                changed = True
-                print pretty("To finish, enter DONE.", 'CLI')
-                while i != "DONE":
-                    i = str(raw_input(pretty("channel: ", 'CLI')))
-                    if i[0] == '#':
-                        self.config[key].append(i)
-
-        if changed:
-            with cwdopen(config_file, 'w') as file:
-                json.dump(self.config, file, indent=2)
-                
-    def init_logging(self):
-        self.logger = None
-        if bool(self.config['logging']):
-            log_level = None
-            server_name = self.config['host'].split('.')[1]
-            log_file = os.path.join(self.homedir, self.folders[1],
-                                    "{0}.log".format(server_name))
-
-            if 'log_level' not in self.config:
-                log_level = logging.INFO
-            else:
-                ll = self.config['log_level']
-                if ll == "DEBUG":
-                    log_level = logging.DEBUG
-                elif ll == "INFO":
-                    log_level = logging.INFO
-                elif ll == "WARNING":
-                    log_level = logging.WARNING
-                elif ll == "ERROR":
-                    log_level = logging.ERROR
-                elif ll == "CRITICAL":
-                    log_level = logging.CRITICAL
-
-            logging.basicConfig(level=log_level)
-            self.logger = logging.getLogger("irc")
-            self.logger.addHandler(logging.FileHandler(log_file, 'a+'))
-
+        # Validate configuration.
+        isvalid = True
+        for key, value in irchelpers.required_irc_config.iteritems():
+            if key not in self.config:
+                isvalid = False
+                logger.error("Missing key: %s", key)
+        if not isvalid:
+            raise ValueError("Required keys missing from configuration.")
+        # TODO: channels/queries 
+                        
     def start(self):
-        self.init_socket()
-        self.sock.connect((self.config['host'], int(self.config['port'])))
+        self._init_socket()
 
         ssl_info = self.sock.cipher()
         if ssl_info:
-            m = pretty("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info), 'INFO')
-            if self.logger:
-                self.logger.info(m)
-            else:
-                print m
+            m = pretty("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info),
+                       'INFO')
+            logger.debug(m)
+            
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
-        self.nick()
-        self.user()
+        self._nick()
+        self._user()
 
-        self.txrx_loop()
+        self._loop()
 
     def stop(self):
-        self.quit()
+        self._quit()
         self.sock.close()
 
-    def init_socket(self):
+    def _init_socket(self):
         self.sock = None
-        """Initialize the socket connection."""
+
         if self.config['ipv6']:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
         else:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.sock = ssl.wrap_socket(sock)
+        self.sock.connect((self.config['host'], int(self.config['port'])))
 
-    def txrx_loop(self):
+    # Thread receive loop
+    def _loop(self):
         """Transmit/Receive loop"""
         while True:
             # Get a raw 4kb chunk of data from the socket.
             data = self.sock.recv(4096)
             if not data:
-                m = pretty("No more data... Connection closed.", 'ERROR')
-                if self.logger:
-                    self.logger.error(m)
-                else:
-                    print m
+                logger.info("No more data... Connection closed.")
                 break
 
             # IRC RFC2812:2.3 states IRC messages always end with '\r\n'
@@ -184,14 +94,16 @@ class IrcClient:
             messages = data.split('\r\n')
             for message in messages:
                 if message:
-                    self.process_msg(message)
+                    logger.info(pretty(message, 'RECEIVE'))
+                    self._proc_msg(message)
 
         self.sock.close()
 
-    def process_msg(self, message):
+    def _proc_msg(self, message):
         """Process IRC messages."""
+        # Split the message into it's prefix, command, and parameters.
         prefix, command, params = None, None, None
-
+        # function-ize this part
         if message[0] == ':':
             prefix, msg = message.split(' ', 1)
             if ' ' in msg:
@@ -200,111 +112,126 @@ class IrcClient:
                 command = msg
         else:
             command, params = message.split(' ', 1)
+        # Parse Prefix
+        if prefix is not None:
+            if '!' in prefix:
+                sender_nick = prefix.split('!')[0][1:]
+            else:
+                sender_nick = prefix
+            
+        # TODO: Put in dict/hash O(n) search
+        # PRIVMSG and NOTICE is where the magic happens.
+        # TODO: Organize into logical channels/queries and output to bot.
+        if command == 'PRIVMSG':
+            if prefix is None:
+                logger.debug("Malformed PRIVMSG: %s", message)
+                return
+            tokens = params.split(' ')
+            bot_cmd = tokens[1][1:]
 
-        # TODO: check interactive? Work on interactive/nohead modes
-        m = pretty(message, 'RECEIVE')
-
-        if self.logger:
-            self.logger.info(m)
-        else:
-            print m
-
-        # TODO: Sort for performance?
-        # clean up command parsing
-        if command == 'PING':
-            self.msg("PONG {0}".format(params))
+            # Reply to CTCP PINGS TODO: modify to catch all CTCP 
+            if bot_cmd == '\x01PING':
+                self._notice_ping(sender_nick, "{0} {1}".format(tokens[2],
+                                                                tokens[3][:-1]))
+            elif cmd[0] == '\x01':
+                logger.debug('Missing CTCP command %s', cmd[1:])
+            else:    
+                self._proc_privmsg(sender_nick, bot_cmd, tokens[2:])
+            
+        elif command == 'NOTICE':
+            self._proc_notice(prefix, params)
         elif command == 'MODE':
             if prefix.lower() == ':nickserv':
+                # Join channels in config automatically 
                 for channel in self.config['channels']:
                     self.join(channel)
-        elif command == 'PRIVMSG':
-            self.process_privmsg(prefix, params)
-        elif command == 'NOTICE':
-            pass
+        # PONG any server PINGs with the same parameters.
+        elif command == 'PING':
+            self._msg("PONG {0}".format(params))
+        # Set the bot's mode on server join after 001 received.
         elif command == '001':
-            self.mode()
+            self._mode()
+        # Identify yourself when connection is ready.
         elif command == '376':
-            if self.nick:
-                self.identify()
+            if self.config['nick'] != '':
+                self._identify()
         elif command == '433':
             if re.match(":Nickname is already in use", params) is not None:
                 self.config['nick'] = "_{}".format(self.config['nick'])
-                self.mode()
+                self._mode()
+        else:
+            logger.debug("Missing command: {}".format(command))
 
-    # TODO: Offload to Bot class. Add more commands.
-    # TODO: clean up command parsing
-    def process_privmsg(self, prefix, params):
-        sender_nick = prefix.split('!')[0][1:]
-        tokens = params.split(' ')
-        command = tokens[1][1:]
+    def _proc_notice(self, prefix, params):
+        pass
+        #raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_notice()")) 
 
-        # Reply to CTCP PINGS
-        if command == '\x01PING':
-            self.notice_ping(sender_nick, "{0} {1}".format(tokens[2],
-                                                           tokens[3][:-1]))
-
-        # Protected cmds TODO: Add privileges
-        elif sender_nick == self.config['owner']:
-            if command == '!quit':
-                self.quit()
+    #def _proc_privmsg(self, sender_nick, command, params):
+    #    raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_privmsg()"))
+    def _proc_privmsg(self, sender_nick, command, params):
+        # SORT data into queries and channels
+        # Put into dict/hash O(n) search...
+        # TODO: Yield data to bot so the bot can asyncronously process it.
+        # TODO: Offload to Bot class. Add more commands. (privileges,etc) (in plugins)
+        if sender_nick == self.config['owner']:
+            if command  ==  '!quit':
+                self._quit()
+            elif command == '!join':
+                if params[0] == '#':
+                    self.join(params[0])
             elif command == '!ping':
                 if len(tokens) > 2:
-                    self.privmsg_ping(tokens[2])
+                    self._privmsg_ping(tokens[2])
                 else:
-                    self.privmsg_ping(sender_nick)
-
+                    self._privmsg_ping(sender_nick)
+            
     # IRC Messages
-    def msg(self, message):
+    def _msg(self, message):
         self.sock.send("{0}\r\n".format(message))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
                          message)
-        m = pretty(message, 'SEND')
-        if self.logger:
-            self.logger.info(m)
-        else:
-            print m
+        logger.info(pretty(message, 'SEND'))
 
-    # Refactor notice and privmsg out or fix how ctcp calls them...
-    def notice(self, destination, message):
-        self.msg("NOTICE {0} :{1}".format(destination, message))
+    def _notice(self, destination, message):
+        self._msg("NOTICE {0} :{1}".format(destination, message))
 
-    def privmsg(self, destination, message):
-        self.msg("PRIVMSG {0} :{1}".format(destination, message))
+    def _privmsg(self, destination, message):
+        self._msg("PRIVMSG {0} :{1}".format(destination, message))
 
-    def nick(self):
-        self.msg("NICK {0}".format(self.config['nick']))
+    def _nick(self):
+        self._msg("NICK {0}".format(self.config['nick']))
 
-    def user(self):
-        self.msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
+    def _user(self):
+        self._msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
                                                self.config['unused'],
                                                self.config['owner']))
 
-    def mode(self):
-        self.msg("MODE {0} {1}".format(self.config['nick'],
+    def _mode(self):
+        self._msg("MODE {0} {1}".format(self.config['nick'],
                                        self.config['mode']))
     def join(self, channel):
-        self.msg("JOIN {0}".format(channel))
+        self._msg("JOIN {0}".format(channel))
 
-    def quit(self, quit_msg='Quitting'):
-        self.msg("QUIT :{0}".format(quit_msg))
+    def _quit(self, quit_msg='Quitting'):
+        self._msg("QUIT :{0}".format(quit_msg))
 
-    def register(self):
-        self.privmsg("NICKSERV",
+    def _register(self):
+        self._privmsg("NICKSERV",
                      "REGISTER {0} {1}".format(self.config['owner_email'],
                                                self.config['pass']))
-    def identify(self):
-        self.privmsg("NICKSERV",
+    def _identify(self):
+        self._privmsg("NICKSERV",
                      "IDENTIFY {0}".format(self.config['pass']))
 
-    # TODO: SRSLY FIX THIS SHIT / PING TOO
-    def ctcp(self, msg_func, destination, message):
-        msg_func(destination, "\x01{0}\x01".format(message))
+    def _wrap_ctcp(self, destination, message):
+        return destination, "\x01{0}\x01".format(message)
 
-    def privmsg_ping(self, destination):
-        #Time the time it takes to receive pong
+    def _privmsg_ping(self, destination):
+        # self.waitingforpong = True, then in loop if self, etc to time
         time = str(timestamp())
-        self.ctcp(self.privmsg, destination,
-                  "PING {0} {1}".format(time[:10], time[10:]))
+        self._privmsg(self._wrap_ctcp(destination,
+                                    "PING {0} {1}".format(time[:10],
+                                                          time[10:])))
 
-    def notice_ping(self, destination, params):
-        self.ctcp(self.notice, destination, "PING {0}".format(params))
+    def _notice_ping(self, destination, params):
+        self._notice(self._wrap_ctcp(destination, "PING {0}".format(params)))
