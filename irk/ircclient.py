@@ -13,8 +13,6 @@
 #
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
-import socket
-import ssl
 import re
 import readline
 import rlcompleter
@@ -22,78 +20,11 @@ import getpass
 import logging
 import sys
 
-from utils import cwdopen, pretty, timestamp
+from utils import cwdopen, pretty
+from ircprotocol import IrcProtocol
 import irctools
 
-
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-
-class IrcProtocol:
-    def __init__(config):
-        raise NotImplementedError("{0}.{1}".format(self.__class__.name__, "__init__()"))
-
-    def _init_socket(self):
-        self.sock = None
-
-        if self.config['ipv6']:
-            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
-        else:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        self.sock = ssl.wrap_socket(sock)
-        self.sock.connect((self.config['host'], int(self.config['port'])))
-
-    # IRC Messages
-    def _msg(self, message):
-        self.sock.send("{0}\r\n".format(message))
-        message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>",
-                         message)
-        logger.info(pretty(message, 'SEND'))
-
-    def _notice(self, destination, message):
-        self._msg("NOTICE {0} :{1}".format(destination, message))
-
-    def _privmsg(self, destination, message):
-        self._msg("PRIVMSG {0} :{1}".format(destination, message))
-
-    def _nick(self):
-        self._msg("NICK {0}".format(self.config['nick']))
-
-    def _user(self):
-        self._msg("USER {0} {1} {2} {3}".format(self.config['user'], 0,
-                                               self.config['unused'],
-                                               self.config['owner']))
-
-    def _mode(self):
-        self._msg("MODE {0} {1}".format(self.config['nick'],
-                                       self.config['mode']))
-    def join(self, channel):
-        self._msg("JOIN {0}".format(channel))
-
-    def _quit(self, quit_msg='Quitting'):
-        self._msg("QUIT :{0}".format(quit_msg))
-
-    def _register(self):
-        self._privmsg("NICKSERV",
-                     "REGISTER {0} {1}".format(self.config['owner_email'],
-                                               self.config['pass']))
-    def _identify(self):
-        self._privmsg("NICKSERV",
-                     "IDENTIFY {0}".format(self.config['pass']))
-
-    def _wrap_ctcp(self, destination, message):
-        return destination, "\x01{0}\x01".format(message)
-
-    def _privmsg_ping(self, destination):
-        # self.waitingforpong = True, then in loop if self, etc to time
-        time = str(timestamp())
-        self._privmsg(self._wrap_ctcp(destination,
-                                    "PING {0} {1}".format(time[:10],
-                                                          time[10:])))
-
-    def _notice_ping(self, destination, params):
-        self._notice(self._wrap_ctcp(destination, "PING {0}".format(params)))
 
 
 # TODO Sort into channels/queries in client or bot? buffer? log it.
@@ -113,7 +44,7 @@ class IrcClient(IrcProtocol):
         # TODO: channels/queries 
 
     def start(self):
-        self._init_socket()
+        self.init_socket()
 
         ssl_info = self.sock.cipher()
         if ssl_info:
@@ -123,15 +54,15 @@ class IrcClient(IrcProtocol):
             
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
-        self._nick()
-        self._user()
+        self.nick()
+        self.user()
+
 
         self._loop()
 
     def stop(self):
-        self._quit()
+        self.quit()
         self.sock.close()
-
 
     # Thread receive loop
     def _loop(self):
@@ -170,8 +101,12 @@ class IrcClient(IrcProtocol):
         if prefix is not None:
             if '!' in prefix:
                 sender_nick = prefix.split('!')[0][1:]
+                hostname = prefix.split('!')[1]
+                if '@' in hostname:
+                    hostname = hostname.split('@')[1]
             else:
                 sender_nick = prefix
+                hostname = prefix
             
         # TODO: Put in dict/hash O(n) search
         # PRIVMSG and NOTICE is where the magic happens.
@@ -183,17 +118,17 @@ class IrcClient(IrcProtocol):
             tokens = params.split(' ')
             bot_cmd = tokens[1][1:]
 
-            # Reply to CTCP PINGS TODO: modify to catch all CTCP 
+            # Reply to CTCP PINGS TODO: modify to catch all CTCP
             if bot_cmd == '\x01PING':
-                self._notice_ping(sender_nick, "{0} {1}".format(tokens[2],
+                self.notice_ping(sender_nick, "\x01{0} {1}\x01".format(tokens[2],
                                                                 tokens[3][:-1]))
-            elif cmd[0] == '\x01':
+            elif bot_cmd[0] == '\x01':
                 logger.debug('Missing CTCP command %s', cmd[1:])
-            else:    
-                self._proc_privmsg(sender_nick, bot_cmd, tokens[2:])
-            
+            else:
+                print bot_cmd
+                self.proc_privmsg((sender_nick, hostname), bot_cmd, tokens[2:])
         elif command == 'NOTICE':
-            self._proc_notice(prefix, params)
+            self.proc_notice((sender_nick, hostname), prefix, params)
         elif command == 'MODE':
             if prefix.lower() == ':nickserv':
                 # Join channels in config automatically 
@@ -204,22 +139,22 @@ class IrcClient(IrcProtocol):
             self._msg("PONG {0}".format(params))
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
-            self._mode()
+            self.mode()
         # Identify yourself when connection is ready.
         elif command == '376':
             if self.config['nick'] != '':
-                self._identify()
+                self.identify()
         elif command == '433':
             if re.match(":Nickname is already in use", params) is not None:
                 self.config['nick'] = "_{}".format(self.config['nick'])
-                self._mode()
+                self.mode()
         else:
             logger.debug("Missing command: {}".format(command))
 
-    def _proc_notice(self, prefix, params):
+    def proc_notice(self, prefix, params):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_notice()")) 
 
-    def _proc_privmsg(self, sender_nick, command, params):
+    def proc_privmsg(self, sender_nick, command, params):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_privmsg()"))
 
 

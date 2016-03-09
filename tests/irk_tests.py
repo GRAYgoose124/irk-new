@@ -1,8 +1,8 @@
 from nose.tools import *
 import irk.__main__
-#from irk.utils import log
+import logging
 
-# logfile here...
+logger = logging.getLogger(__name__)
 
 def setup():
     pass
@@ -12,6 +12,6 @@ def teardown():
     print "Finishing tests..." 
 
 def test_basic():
-    print "Entering irk.__main__.main()"
+    logger.debug("Entering irk.__main__.main()")
     #send logfile to irk
     irk.__main__.main()

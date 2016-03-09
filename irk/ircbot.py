@@ -13,29 +13,38 @@
 #
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
+import logging
+import sys
 
-import irc
+from ircclient import IrcClient
+
+logger = logging.getLogger(__name__)
 
 # TODO: Plugins
 # TODO: Dict/Hash efficient lookup
 
-class IrcBot(irc.IrcClient):
-    def _proc_notice(self, prefix, params):
-        pass
+class IrcBot(IrcClient):
+    def __init__(self, directory, config, interactive=True):
+        IrcClient.__init__(self, directory, config, interactive)
 
-    def _proc_privmsg(self, sender_nick, command, params):
+        # get host if owner && if he's identified
+        self.logged_in_host = None
+
+    def proc_notice(self, sender, prefix, params):
+        return
+
+    def proc_privmsg(self, sender, command, params):
+        logger.debug("privmsg: %s %s %s", sender, command, params)
         # SORT data into queries and channels
         # Put into dict/hash O(n) search...
         # TODO: Yield data to bot so the bot can asyncronously process it.
         # TODO: Offload to Bot class. Add more commands. (privileges,etc) (in plugins)
-        if sender_nick == self.config['owner']:
+
+        if sender[0] == self.config['owner']:
             if command  ==  '!quit':
-                self._quit()
+                self.quit()
             elif command == '!join':
-                if params[0] == '#':
-                    self.join(params[0])
+                if str(params[0])[0] == '#':
+                    self.join(str(params[0]))
             elif command == '!ping':
-                if len(tokens) > 2:
-                    self._privmsg_ping(tokens[2])
-                else:
-                    self._privmsg_ping(sender_nick)
+                    self.privmsg_ping(sender[0])

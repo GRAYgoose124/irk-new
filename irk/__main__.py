@@ -17,8 +17,7 @@ import os
 import logging
 
 import irctools
-import irc
-import bot
+from ircbot import IrcBot
 
 # TODO: Load plugins (in bot class) (live reload) (permissions, etc)
 
@@ -39,12 +38,12 @@ def main():
     config_filename = os.path.join(home_dir, "config")
     config = irctools.init_or_load_config(config_filename)
 
-    # Log to file 
+    # Log to file
     logging.basicConfig(level=logging.DEBUG)
     root = logging.getLogger()
     root.addHandler(logging.FileHandler(os.path.join(home_dir, "logs/irk.log"), 'w'))
 
-    client = bot.IrcBot(home_dir, config)
+    client = IrcBot(home_dir, config)
 
     # Make non-blocking
     try:
