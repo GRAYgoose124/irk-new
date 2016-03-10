@@ -34,6 +34,10 @@ def pretty(message, t='SIMPLE'):
         m = "CLI| {0}"
     elif t == 'SYSINFO':
         m = " ! | {0}"
+    elif t == 'BOT':
+        m = "BOT| {0}"
+    else:
+        m = "   | {0}"
     return m.format(message)
 
 def cwdopen(filename, mode='r'):

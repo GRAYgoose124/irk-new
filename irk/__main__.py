@@ -15,9 +15,11 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import os
 import logging
+import sys
 
 import irctools
 from ircbot import IrcBot
+
 
 # TODO: Load plugins (in bot class) (live reload) (permissions, etc)
 
@@ -39,9 +41,19 @@ def main():
     config = irctools.init_or_load_config(config_filename)
 
     # Log to file
-    logging.basicConfig(level=logging.DEBUG)
+    logging.addLevelName(25, "OUT")
+    logging.basicConfig(level=25)
     root = logging.getLogger()
-    root.addHandler(logging.FileHandler(os.path.join(home_dir, "logs/irk.log"), 'w'))
+    shandler = logging.StreamHandler(sys.stdout)
+    fhandler = logging.FileHandler(os.path.join(home_dir,
+                                                "logs/irk.log"), 'w')
+
+    simple_format = logging.Formatter('[%(levelname)7s]%(message)s')
+    complex_format = logging.Formatter('[%(levelname)7s:%(name)15s] |%(message)s')
+    shandler.setFormatter(simple_format)
+    fhandler.setFormatter(complex_format)
+    root.addHandler(fhandler)
+    root.addHandler(shandler)
 
     client = IrcBot(home_dir, config)
 

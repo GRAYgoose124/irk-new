@@ -57,7 +57,6 @@ class IrcClient(IrcProtocol):
         self.nick()
         self.user()
 
-
         self._loop()
 
     def stop(self):
@@ -117,17 +116,20 @@ class IrcClient(IrcProtocol):
                 return
             tokens = params.split(' ')
             bot_cmd = tokens[1][1:]
-
+            destination = tokens[0]
+            params = tokens[2:]
             # Reply to CTCP PINGS TODO: modify to catch all CTCP
             if bot_cmd == '\x01PING':
+                print tokens
                 self.notice_ping(sender_nick, "\x01{0} {1}\x01".format(tokens[2],
                                                                 tokens[3][:-1]))
             elif bot_cmd[0] == '\x01':
-                logger.debug('Missing CTCP command %s', cmd[1:])
+                logger.debug('Missing CTCP command %s', bot_cmd[1:])
             else:
-                print bot_cmd
-                self.proc_privmsg((sender_nick, hostname), bot_cmd, tokens[2:])
+                data = (sender_nick, hostname, destination, bot_cmd, params)
+                self.proc_privmsg(data)
         elif command == 'NOTICE':
+            
             self.proc_notice((sender_nick, hostname), prefix, params)
         elif command == 'MODE':
             if prefix.lower() == ':nickserv':
@@ -149,7 +151,7 @@ class IrcClient(IrcProtocol):
                 self.config['nick'] = "_{}".format(self.config['nick'])
                 self.mode()
         else:
-            logger.debug("Missing command: {}".format(command))
+            logger.debug(pretty("Missing IRC command: {0} ({1})".format(command, params), 'REC'))
 
     def proc_notice(self, prefix, params):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "_proc_notice()")) 

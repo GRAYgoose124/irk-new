@@ -16,6 +16,7 @@
 import os
 import json
 import logging
+import getpass
 
 from utils import pretty, cwdopen
 
@@ -71,6 +72,7 @@ def init_or_load_config(config_file):
             config[key] = getpass.getpass(pretty("pass: ", 'CLI'))
             changed = True
         elif key == 'channels' and value == []:
+            i = None
             print pretty("To finish, enter DONE.", 'CLI')
             while i != "DONE":
                 i = str(raw_input(pretty("channel: ", 'CLI')))

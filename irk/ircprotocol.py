@@ -73,6 +73,9 @@ class IrcProtocol:
     def join(self, channel):
         self._msg("JOIN {0}".format(channel))
 
+    def part(self, channel, message="Leaving"):
+        self._msg("PART {0} {1}".format(channel, message))
+
     def quit(self, quit_msg='Quitting'):
         self._msg("QUIT :{0}".format(quit_msg))
 
@@ -91,4 +94,4 @@ class IrcProtocol:
         self.privmsg(destination, m)
 
     def notice_ping(self, destination, params):
-        self.notice("PING {0}".format(params), destination)
+        self.notice(destination, "PING {0}".format(params))

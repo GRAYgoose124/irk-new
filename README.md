@@ -22,16 +22,26 @@ Refer to the LICENSE file before using Irk.
 
 #### Running after installation.
 `$ irk`   
-(`CTRL+C` to safely quit)
+(`CTRL+C` to safely quit or send the `!quit` command)
                                      
 #### Uninstalling                                                                                           
 `$ pip uninstall irk`                                
 
 ## PROJECT STATUS 
-What version? Haha.
+What version? Haha. Try 0.1.
                                             
 ### TODO 
-Everything.  
+* Plugins System
+  * Permissions
+  * Commands
+
+* Proper Debug Logging
+  * More debug loggings
+  * Consistent and Clean
+
+* IRC Logging
+  * Individual channels/Queries to a file in folders for servers
+  * No Extraneous data (only user & message per line in file)
 
 ### BUGS
 Lots.
