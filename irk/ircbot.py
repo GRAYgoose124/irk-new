@@ -60,7 +60,7 @@ class IrcBot(IrcClient, PluginManager):
             elif command == '!ping':
                 self.privmsg_ping(sender_nick)
             
-            self.privmsg_hooks(data)
+            self.privmsg_plugin_hooks(data)
 
             if command[0] == '!':
                 logger.info(pretty("{0} ran {1}".format(sender_nick, command), 'BOT'))
