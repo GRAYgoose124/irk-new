@@ -21,8 +21,8 @@ import logging
 import sys
 
 from utils import cwdopen, pretty
-from ircprotocol import IrcProtocol
-import irctools
+from protocol import IrcProtocol
+import tools
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class IrcClient(IrcProtocol):
 
         # Validate configuration.
         isvalid = True
-        for key, value in irctools.required_irc_config.iteritems():
+        for key, value in tools.required_irc_config.iteritems():
             if key not in self.config:
                 isvalid = False
                 logger.error("Missing key: %s", key)
@@ -120,9 +120,7 @@ class IrcClient(IrcProtocol):
             params = tokens[2:]
             # Reply to CTCP PINGS TODO: modify to catch all CTCP
             if bot_cmd == '\x01PING':
-                print tokens
-                self.notice_ping(sender_nick, "\x01{0} {1}\x01".format(tokens[2],
-                                                                tokens[3][:-1]))
+                self.notice_ping(sender_nick, "{0} {1}".format(tokens[2], tokens[3][:-1]))
             elif bot_cmd[0] == '\x01':
                 logger.debug('Missing CTCP command %s', bot_cmd[1:])
             else:

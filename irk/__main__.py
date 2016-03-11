@@ -17,8 +17,8 @@ import os
 import logging
 import sys
 
-import irctools
-from ircbot import IrcBot
+import tools
+from bot import IrcBot
 
 
 # TODO: Load plugins (in bot class) (live reload) (permissions, etc)
@@ -35,10 +35,10 @@ def parse_arguments():
 
             
 def main():
-    home_dir, subfolders = irctools.init_homedir(".irk")
+    home_dir, subfolders = tools.init_homedir(".irk")
     
     config_filename = os.path.join(home_dir, "config")
-    config = irctools.init_or_load_config(config_filename)
+    config = tools.init_or_load_config(config_filename)
 
     # Log to file
     logging.addLevelName(25, "OUT")
@@ -63,3 +63,5 @@ def main():
     except KeyboardInterrupt:
         client.stop()
         
+if __name__ == '__main__':
+    main()

@@ -94,4 +94,4 @@ class IrcProtocol:
         self.privmsg(destination, m)
 
     def notice_ping(self, destination, params):
-        self.notice(destination, "PING {0}".format(params))
+        self.notice(destination, "\x01PING {0}\x01".format(params))

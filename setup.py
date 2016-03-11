@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #   Irk: irc bot 
 #   Copyright (C) 2016  Grayson Miller
 #
@@ -17,13 +18,12 @@ from setuptools import setup
 
 config = {
     'name': 'irk',
-    'description': '\'smart\' irc bot',
+    'description': 'A \'smart\' irc bot with plugins.',
     'author': 'Grayson Miller',
-    'url': 'URL to get it at.',
-    'download_url': 'none',
+    'url': 'https://github.com/GRAYgoose124/irk',
+    'download_url': 'git@github.com:GRAYgoose124/irk.git',
     'author_email': 'grayson.miller124@gmail.com',
-    'version': '0.1',
-    'install_requires': ['nose'],
+    'version': '0.2',
     'packages': ['irk'],
     'entry_points': {
         'console_scripts': [

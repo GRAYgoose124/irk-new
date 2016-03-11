@@ -18,7 +18,7 @@ import sys
 import os
 
 from plugin import PluginManager
-from ircclient import IrcClient
+from client import IrcClient
 from utils import pretty
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,6 @@ class IrcBot(IrcClient, PluginManager):
 
     # make this take channel/query dest as well
     def proc_privmsg(self, data):
-        logger.debug(pretty("%s %s %s %s %s"), *data)
         sender_nick, hostname, destination, command, params = data
         # SORT data into queries and channels
         # Put into dict/hash O(n) search...
@@ -57,6 +56,9 @@ class IrcBot(IrcClient, PluginManager):
             elif command == '!part':
                 if str(params[0])[0] == '#':
                     self.part(str(params[0]))
+            elif command == '!reload':
+                self.reload_plugin(str(params[0]))
+                self.privmsg(sender_nick, "{} reloaded.".format(params[0]))
             elif command == '!ping':
                 self.privmsg_ping(sender_nick)
             
