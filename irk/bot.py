@@ -46,6 +46,12 @@ class IrcBot(IrcClient, PluginManager):
     def process_privmsg_hooks(self, data):
         # TODO: More robust 'login'/privilege system
         if data['sender'] == self.config['owner']:
+
+            if data['orig_dest'][0] == '#':
+                data['to_channel'] = True
+            else:
+                data['to_channel'] = False
+
             if data['command']  ==  '!quit':
                 self.quit()
 
@@ -59,21 +65,25 @@ class IrcBot(IrcClient, PluginManager):
 
             elif data['command'] == '!load':
                 if self.load_plugin(str(data['arguments'][0])):
-                    if data['orig_dest'] != self.config['nick']:
-                        self.privmsg(data['orig_dest'], "{} loaded.".format(data['arguments'][0]))
-                    else:
-                        self.privmsg(data['sender'], "{} loaded.".format(data['arguments'][0]))
-
+                    self.send_results(data)
             elif data['command'] == '!reload':
                 if self.reload_plugin(str(data['arguments'][0])):
-                    self.privmsg(data['orig_dest'], "{} reloaded.".format(data['arguments'][0]))
+                    self.send_results(data)
 
             elif data['command'] == '!ping':
                 self.privmsg_ping(data['sender'])
 
             # TODO: Create permissions, allow plugins to use other plugins, etc.
             # Run all PRIVMSG event hooks from plugins.
+
             self.privmsg_plugin_hooks(data)
 
             if data['command'][0] == '!':
                 logger.debug(pretty("{0} ran {1}".format(data['sender'], data['command']), 'BOT'))
+
+    # TODO: Make this more intelligent,
+    def send_results(self, data):
+        if data['orig_dest'] != self.config['nick']:
+            self.privmsg(data['orig_dest'], "{} loaded.".format(data['arguments'][0]))
+        else:
+            self.privmsg(data['sender'], "{} loaded.".format(data['arguments'][0]))

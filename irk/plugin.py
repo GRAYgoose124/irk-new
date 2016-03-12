@@ -80,13 +80,11 @@ class PluginManager:
     # TODO ADD hooks for all types of messages + parallelize, add to API
     def privmsg_plugin_hooks(self, data):
         for plugin in self.plugins:
-
             if hasattr(plugin, 'privmsg_hook'):
                 logger.log(9, pretty("Running {0}.privmsg_hook()".format(plugin.__class__.__name__)))
 
                 try:
                     plugin.privmsg_hook(self, data)
-
                 except Exception as e:
                     # TODO: Unload plugin, report in chat.
                     logger.warning(pretty("Plugin {0}\n\t\t{1}".format(plugin.__class__.__name__, repr(e)), 'PLUGIN_ERROR'))
