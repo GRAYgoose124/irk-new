@@ -15,11 +15,14 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import argparse
 import os
-import datetime
 import logging
+import datetime
+
 
 logger = logging.getLogger(__name__)
 
+
+# TODO: Standardize codes, remove from logs, only print in stdout. Make a plugin.
 def pretty(message, t='SIMPLE'):
     m = None
     if t == 'SIMPLE':
@@ -36,13 +39,17 @@ def pretty(message, t='SIMPLE'):
         m = " ! | {0}"
     elif t == 'BOT':
         m = "BOT| {0}"
+    elif t == 'PLUGIN_ERROR':
+        m = "P.X| {0}"
     else:
         m = "   | {0}"
     return m.format(message)
 
+
+# TODO: This whole function should be slated...
 def cwdopen(filename, mode='r'):
     """Check whether to prepend the CWD or not based on the filename."""
-    logger.debug("Opened file {0} with '{1}' permissions.".format(filename, mode))
+    logger.debug("Opened file {0} with \'{1}\' permissions.".format(filename, mode))
 
     try:
         if os.path.isabs(filename):
@@ -52,6 +59,7 @@ def cwdopen(filename, mode='r'):
     except IOError as e:
         logger.error("File not found.")
         return None
+
 
 def timestamp():
     return int((datetime.datetime.utcnow()

@@ -14,55 +14,66 @@
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import logging
-import sys
 import os
 
 from plugin import PluginManager
 from client import IrcClient
 from utils import pretty
 
+
 logger = logging.getLogger(__name__)
 
-# TODO: Plugins
-# TODO: Dict/Hash efficient lookup
 
 class IrcBot(IrcClient, PluginManager):
-    def __init__(self, directory, config, interactive=True):
-        IrcClient.__init__(self, directory, config, interactive)
-        PluginManager.__init__(self)
+    def __init__(self, home_directory):
+        if os.path.isabs(home_directory):
+            self.home_directory = home_directory
+        else:
+            self.home_directory = os.path.join(os.path.expanduser('~'), home_directory)
 
-        plugin_folder = os.path.join(directory, "plugins")
-        self.load_plugin_folder(plugin_folder)
-        # get host if owner && if he's identified
-        self.logged_in_host = None
+        self.plugins_folder = os.path.join(self.home_directory, "plugins")
 
-    def proc_notice(self, sender, prefix, params):
-        return
+        # TODO: Do proper file checks and creation.
+        if not os.path.isdir(self.home_directory):
+            os.makedirs(self.plugins_folder)
+        elif not os.path.isdir(self.plugins_folder):
+            os.mkdir(self.plugins_folder)
 
-    # make this take channel/query dest as well
-    def proc_privmsg(self, data):
-        sender_nick, hostname, destination, command, params = data
-        # SORT data into queries and channels
-        # Put into dict/hash O(n) search...
-        # TODO: Yield data to bot so the bot can asyncronously process it
-        # TODO: Offload to Bot class. Add more commands. (privileges,etc) (in plugins)
-        # We need to be sure it's actually a command at this point..
-        if sender_nick == self.config['owner']:
-            if command  ==  '!quit':
+        IrcClient.__init__(self, self.home_directory)
+        PluginManager.__init__(self, self.plugins_folder)
+
+    # Process all PRIVMSG related event
+    def process_privmsg_hooks(self, data):
+        # TODO: More robust 'login'/privilege system
+        if data['sender'] == self.config['owner']:
+            if data['command']  ==  '!quit':
                 self.quit()
-            elif command == '!join':
-                if str(params[0])[0] == '#':
-                    self.join(str(params[0]))
-            elif command == '!part':
-                if str(params[0])[0] == '#':
-                    self.part(str(params[0]))
-            elif command == '!reload':
-                self.reload_plugin(str(params[0]))
-                self.privmsg(sender_nick, "{} reloaded.".format(params[0]))
-            elif command == '!ping':
-                self.privmsg_ping(sender_nick)
-            
+
+            elif data['command'] == '!join':
+                if str(data['arguments'][0])[0] == '#':
+                    self.join(str(data['arguments'][0]))
+
+            elif data['command'] == '!part':
+                if str(data['arguments'][0])[0] == '#':
+                    self.part(str(data['arguments'][0]))
+
+            elif data['command'] == '!load':
+                if self.load_plugin(str(data['arguments'][0])):
+                    if data['orig_dest'] != self.config['nick']:
+                        self.privmsg(data['orig_dest'], "{} loaded.".format(data['arguments'][0]))
+                    else:
+                        self.privmsg(data['sender'], "{} loaded.".format(data['arguments'][0]))
+
+            elif data['command'] == '!reload':
+                if self.reload_plugin(str(data['arguments'][0])):
+                    self.privmsg(data['orig_dest'], "{} reloaded.".format(data['arguments'][0]))
+
+            elif data['command'] == '!ping':
+                self.privmsg_ping(data['sender'])
+
+            # TODO: Create permissions, allow plugins to use other plugins, etc.
+            # Run all PRIVMSG event hooks from plugins.
             self.privmsg_plugin_hooks(data)
 
-            if command[0] == '!':
-                logger.info(pretty("{0} ran {1}".format(sender_nick, command), 'BOT'))
+            if data['command'][0] == '!':
+                logger.debug(pretty("{0} ran {1}".format(data['sender'], data['command']), 'BOT'))

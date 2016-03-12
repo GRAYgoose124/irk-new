@@ -1,11 +1,13 @@
+# TODO: Document API, use this plugin as API example.
+
 class SimplePlugin:
-    def command_hook(self, handler, data):
-        sender_nick, hostname, destination, command, params = data
+    def privmsg_hook(self, handler, data):
+        if data['command'] != '!test':
+            return
 
-        message = "+ +".join(params)
+        response = ""
 
-        if command == '!test':
-            if destination[0] == "#":
-                handler.privmsg(destination, message)
-            elif destination == handler.config['nick']:
-                handler.privmsg(sender_nick, message)
+        if data['orig_dest'][0] == "#":
+            handler.privmsg(data['orig_dest'], response)
+        elif data['orig_dest'] == handler.config['nick']:
+            handler.privmsg(data['sender'], response)

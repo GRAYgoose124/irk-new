@@ -13,55 +13,41 @@
 
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
-import os
-import logging
 import sys
+import os
+import json
+import logging
+import getpass
 
-import tools
 from bot import IrcBot
 
 
-# TODO: Load plugins (in bot class) (live reload) (permissions, etc)
+logging.addLevelName(25, "OUT")
+logging.basicConfig(level=logging.DEBUG)
+
+logger = logging.getLogger(__name__)
 
 
-# TODO: Logging from command line, regen config, etc.
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str,
-                        help="Configuration file. defaults to: \'~/.irk\'")
-    #parser.add_argument(''
-    #args = parser.parse_args()
-    return args
-
-            
 def main():
-    home_dir, subfolders = tools.init_homedir(".irk")
-    
-    config_filename = os.path.join(home_dir, "config")
-    config = tools.init_or_load_config(config_filename)
+    home_directory = ".irk"
 
-    # Log to file
-    logging.addLevelName(25, "OUT")
-    logging.basicConfig(level=25)
-    root = logging.getLogger()
-    shandler = logging.StreamHandler(sys.stdout)
-    fhandler = logging.FileHandler(os.path.join(home_dir,
-                                                "logs/irk.log"), 'w')
+    # TODO: Clean up logging levels and logging, remove extraneous and organize.
+    # Logging
+    format = logging.Formatter('[%(levelname)s:%(name)s] %(message)s')
+    stream_handler = logging.StreamHandler(sys.stdout)
+    logger.addHandler(stream_handler.setFormatter(format))
 
-    simple_format = logging.Formatter('[%(levelname)7s]%(message)s')
-    complex_format = logging.Formatter('[%(levelname)7s:%(name)15s] |%(message)s')
-    shandler.setFormatter(simple_format)
-    fhandler.setFormatter(complex_format)
-    root.addHandler(fhandler)
-    root.addHandler(shandler)
+    log_filename = __name__ + "_debug.log"
+    file_handler = logging.FileHandler(log_filename, 'w')
+    logger.addHandler(file_handler.setFormatter(format))
 
-    client = IrcBot(home_dir, config)
-
-    # Make non-blocking
+    # Start Bot
+    client = IrcBot(home_directory)
     try:
         client.start()
     except KeyboardInterrupt:
         client.stop()
-        
+
+
 if __name__ == '__main__':
     main()
