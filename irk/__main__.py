@@ -13,41 +13,23 @@
 
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
-import sys
-import os
-import json
 import logging
-import getpass
 
 from bot import IrcBot
 
 
-logging.addLevelName(25, "OUT")
-logging.basicConfig(level=logging.DEBUG)
-
+logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(name)s:%(lineno)s | %(message)s')
 logger = logging.getLogger(__name__)
 
 
 def main():
     home_directory = ".irk"
 
-    # TODO: Clean up logging levels and logging, remove extraneous and organize.
-    # Logging
-    format = logging.Formatter('[%(levelname)s:%(name)s] %(message)s')
-    stream_handler = logging.StreamHandler(sys.stdout)
-    logger.addHandler(stream_handler.setFormatter(format))
-
-    log_filename = __name__ + "_debug.log"
-    file_handler = logging.FileHandler(log_filename, 'w')
-    logger.addHandler(file_handler.setFormatter(format))
-
-    # Start Bot
     client = IrcBot(home_directory)
     try:
         client.start()
     except KeyboardInterrupt:
         client.stop()
-
 
 if __name__ == '__main__':
     main()

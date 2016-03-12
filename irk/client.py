@@ -21,7 +21,6 @@ import os
 import json
 import getpass
 
-from utils import pretty, cwdopen
 from protocol import IrcProtocol
 
 
@@ -36,7 +35,7 @@ required_irc_config = {
     'owner': '', 'owner_email': '',
     'channels': []
  }
-
+import datetime
 
 # TODO Sort into channels/queries in client or bot? buffer? log it.
 class IrcClient(IrcProtocol):
@@ -54,14 +53,13 @@ class IrcClient(IrcProtocol):
 
         ssl_info = self.sock.cipher()
         if ssl_info:
-            m = pretty("SSL Cipher ({0}), SSL Version ({1}), SSL Bits ({2})".format(*ssl_info),
-                       'INFO')
-            logger.debug(m)
+            logger.info("SSL Cipher (%s), SSL Version (%s), SSL Bits (%s)", *ssl_info)
             
         # IRC RFC2812:3.1 states that a client needs to send a nick and
         # user message in order to register a connection.
-        self.nick()
-        self.user()
+        # Most servers mandate that the user's real name be the owner.
+        self.nick(self.config['nick'])
+        self.user(self.config['user'], self.config['unused'], self.config['owner'])
 
         self._loop()
 
@@ -88,52 +86,28 @@ class IrcClient(IrcProtocol):
                 logger.info("No more data... Connection closed.")
                 break
 
-            # IRC RFC2812:2.3 states IRC messages always end with '\r\n'
-            # Split the data into the IRC message sit contains.
+            # IRC RFC2812:2.3
             messages = data.split('\r\n')
             for message in messages:
                 if message:
-                    logger.info(pretty(message, 'RECEIVE'))
-                    self._proc_msg(message)
+                    print message
+                    self._process_message(message)
 
         self.sock.close()
 
      # TODO: Put commands in table/dict/hash O(n) search structure.
-    def _proc_msg(self, message):
+    def _process_message(self, message):
         """Process IRC messages."""
         # Prefix check and simple parse
-        prefix, command, params = None, None, None
+        prefix, command, params = self.split_message(message)
+        sender, ident = self.parse_prefix(prefix)
 
-        if message[0] == ':':
-            prefix, msg = message.split(' ', 1)
-
-            if ' ' in msg:
-                command, params = msg.split(' ', 1)
-            else:
-                command = msg
-        else:
-            command, params = message.split(' ', 1)
-
-        # Parse Prefix
-        sender, ident = None, None
-
-        if prefix is not None:
-            if '!' in prefix:
-                sender = prefix.split('!')[0][1:]
-                ident = prefix.split('!')[1]
-
-                if '@' in ident:
-                    ident = ident.split('@')[1]
-            else:
-                sender = prefix
-                ident = prefix
-
-        # PRIVMSG is where the magic happens.
         if command == 'PRIVMSG':
             if prefix is None:
                 logger.debug("Malformed PRIVMSG: %s", message)
                 return
 
+            # Process PRIVMSG data packet.
             tokens = params.split(' ')
             data = { 'sender': sender,
                      'ident': ident,
@@ -144,14 +118,13 @@ class IrcClient(IrcProtocol):
 
             # CTCP PRIVMSG
             if data['command'] == '\x01PING':
-                time_stamp_copy = tokens[3][:-1]
-                self.notice_ping(data['sender'], "{0} {1}".format(data['orig_dest'], time_stamp_copy))
-
+                time_stamp_copy = " ".join((data['arguments'][0], data['arguments'][1][:-1]))
+                self.notice(data['sender'], self.wrap_ctcp(" ".join(("PING", format(time_stamp_copy)))))
             elif data['command'][0] == '\x01':
                 logger.debug('Missing CTCP command %s', data['command'])
 
             # Run all plugins which provide a command_hook()
-            self.process_privmsg_hooks(data)
+            self.process_privmsg_events(data)
 
         elif command == 'NOTICE':
             pass
@@ -168,63 +141,62 @@ class IrcClient(IrcProtocol):
 
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
-            self.mode()
+            self.mode(self.config['nick'], self.config['mode'])
 
         # Identify yourself when connection is ready.
         elif command == '376':
             if self.config['nick'] != '':
-                self.identify()
+                self.identify(self.config['pass'])
 
         elif command == '433':
             if re.match(":Nickname is already in use", params) is not None:
                 self.config['nick'] = "_{}".format(self.config['nick'])
-                self.mode()
+                self.mode(self.config['nick'], self.config['mode'])
 
         else:
-            logger.debug(pretty("Missing IRC command: {0} ({1})".format(command, params), 'REC'))
+            logger.debug("Missing IRC command: %s (%s)", command, params)
 
     # TODO: Clean this up, make sure it's valid
     def _init_config(self, config_file):
         if not os.path.exists(config_file):
-            with cwdopen(config_file, 'w') as file:
+            with open(config_file, 'w') as file:
                 json.dump(required_irc_config, file, indent=2)
 
         changed = False
-        config = json.load(cwdopen(config_file, 'r'))
+        config = json.load(open(config_file, 'r'))
 
+        # TODO: Move into function
         for key, value in config.iteritems():
             if value is None or value == '' and key != 'pass':
-                config[key] = str(raw_input(pretty("{}: ".format(key), 'CLI')))
+                config[key] = str(raw_input(''.join(key, '>')))
                 changed = True
 
             elif key == 'pass' and value == '':
-                config[key] = getpass.getpass(pretty("pass: ", 'CLI'))
+                config[key] = getpass.getpass("pass: ")
                 changed = True
 
             elif key == 'channels' and value == []:
-                i = None
-                print pretty("To finish, enter DONE.", 'CLI')
+                string = None
+                print "To finish, enter DONE."
 
-                while i != "DONE":
-                    i = str(raw_input(pretty("channel: ", 'CLI')))
-
-                    if i[0] == '#':
-                        config[key].append(i)
-
+                while string != 'DONE':
+                    string = str(raw_input("channel: "))
+                    if string[0] == '#':
+                        config[key].append(string)
                 changed = True
 
         if changed:
-            with cwdopen(config_file, 'w') as file:
+            with open(config_file, 'w') as file:
                 json.dump(config, file, indent=2)
 
         for key, value in required_irc_config.iteritems():
             if key not in config:
-                return None
+                config = None
 
         return config
 
     # Available Plugin Hooks
-    def process_privmsg_hooks(self, data):
+    def process_privmsg_events(self, data):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "process_privmsg_hooks()"))
 
 

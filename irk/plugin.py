@@ -1,25 +1,17 @@
-import bot
-from utils import pretty
-
 import os
-import re
-import json
 import imp
 import logging
 
-from utils import pretty
-
-import inspect
 
 logger = logging.getLogger(__name__)
 
 
+# TODO: Merge reused code and be verbose about plugin syntax errors.
 class PluginManager:
     def __init__(self, folder_name):
         self.plugins = []
         self.load_plugin_folder(folder_name)
 
-    # Move parameter into __init__
     def load_plugin_folder(self, folder_name):
         plugin = None
         self.plugin_folder = folder_name
@@ -31,60 +23,69 @@ class PluginManager:
                     python_file = os.path.join(folder_name, filename)
 
                     if file_ext == ".py":
-                        plugin = imp.load_source(plugin_name, python_file)
+                        try:
+                            plugin = imp.load_source(plugin_name, python_file)
+                        except:
+                            plugin = None
 
                     if plugin:
                         if hasattr(plugin, plugin_name):
-                            # Get an instance and become it's manager
                             plugin_instance = getattr(plugin, plugin_name)()
+
                             if plugin_instance:
                                 self.plugins.append(plugin_instance)
-                                logger.info(pretty("Plugin {0} loaded.".format(plugin_name)))
+                                logger.info("Plugin %s loaded.", plugin_name)
+
                         plugin = None
 
         else:
             raise ValueError("Not an absolute pathname!")
 
-        logger.debug(pretty("Loaded plugins: {0}".format(self.plugins)))
+        logger.debug("Loaded plugins: %s", self.plugins)
 
     def load_plugin(self, plugin_name):
+        plugin = None
         python_file = os.path.join(self.plugin_folder, plugin_name + ".py")
 
         if os.path.isfile(python_file):
-            p = imp.load_source(plugin_name, python_file)
+            try:
+                plugin = imp.load_source(plugin_name, python_file)
+            except:
+                plugin = None
 
-            if p:
-                self.plugins.append(getattr(p, plugin_name)())
-                logger.debug(pretty("Plugin {0} loaded.".format(plugin_name)))
-                return True
+            if plugin:
+                self.plugins.append(getattr(plugin, plugin_name)())
+                logger.debug("Plugin %s loaded.", plugin_name)
+                plugin = self.plugins[len(self.plugins)]
 
-        return False
+        return plugin
 
     def reload_plugin(self, plugin_name):
+        plugin = None
         for idx, plugin in enumerate(self.plugins):
             if plugin.__class__.__name__ == plugin_name:
                 python_file = os.path.join(self.plugin_folder, plugin_name + ".py")
 
                 if os.path.isfile(python_file):
-                    p = imp.load_source(plugin_name, python_file)
+                    try:
+                        plugin = imp.load_source(plugin_name, python_file)
+                    except:
+                        plugin = None
 
-                    if p:
-                        self.plugins[idx] = getattr(p, plugin_name)()
-                        logger.debug(pretty("Plugin {0} reloaded.".format(plugin_name)))
-                        return True
-        return False
+                    if plugin:
+                        self.plugins[idx] = getattr(plugin, plugin_name)()
+                        logger.debug("Plugin %s reloaded.", plugin_name)
+                        plugin = self.plugins[idx]
 
-    def list_plugins(self):
-        print self.plugins
+        return plugin
 
     # TODO ADD hooks for all types of messages + parallelize, add to API
-    def privmsg_plugin_hooks(self, data):
+    def run_privmsg_hooks(self, data):
         for plugin in self.plugins:
             if hasattr(plugin, 'privmsg_hook'):
-                logger.log(9, pretty("Running {0}.privmsg_hook()".format(plugin.__class__.__name__)))
-
+                logging.debug("Running %s.privmsg_hook()", plugin.__class__.__name__)
                 try:
                     plugin.privmsg_hook(self, data)
                 except Exception as e:
                     # TODO: Unload plugin, report in chat.
-                    logger.warning(pretty("Plugin {0}\n\t\t{1}".format(plugin.__class__.__name__, repr(e)), 'PLUGIN_ERROR'))
+                    logger.warning("Plugin %s\n\t\t%s\n", plugin.__class__.__name__, repr(e))

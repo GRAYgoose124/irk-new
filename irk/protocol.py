@@ -10,34 +10,33 @@
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU Affero General Public License for more details.
-#
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import re
 import logging
-
-from utils import pretty, timestamp
+import datetime
+import string
 
 
 logger = logging.getLogger(__name__)
 
 
 class IrcProtocol:
+    """ This class defines functions to send messages over the IRC protocol
+        in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
     def __init__(self):
         self.sock = None
-        self.config = None
 
-    # IRC Messages
+        self.invalid_chars = string.maketrans(string.ascii_lowercase, ' ' * len(string.ascii_lowercase))
+
     def _msg(self, message):
+        """ Send a basic IRC message over the socket."""
         self.sock.send("{0}\r\n".format(message))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
-        logger.info(pretty(message, 'SEND'))
+        print message
 
-    def _wrap_ctcp(self, message, destination=None):
-        if destination is not None:
-            return destination, "\x01{0}\x01".format(message)
-        else:
-            return "\x01{0}\x01".format(message)
+    def wrap_ctcp(self, message):
+        return "\x01{0}\x01".format(message)
 
     def notice(self, destination, message):
         self._msg("NOTICE {0} :{1}".format(destination, message))
@@ -47,14 +46,14 @@ class IrcProtocol:
             return
         self._msg("PRIVMSG {0} :{1}".format(destination, message))
 
-    def nick(self):
-        self._msg("NICK {0}".format(self.config['nick']))
+    def nick(self, nick):
+        self._msg("NICK {0}".format(nick))
 
-    def user(self):
-        self._msg("USER {0} {1} {2} {3}".format(self.config['user'], 0, self.config['unused'], self.config['owner']))
+    def user(self, user, unused, owner):
+        self._msg("USER {0} {1} {2} {3}".format(user, 0, unused, owner))
 
-    def mode(self):
-        self._msg("MODE {0} {1}".format(self.config['nick'], self.config['mode']))
+    def mode(self, nick, mode):
+        self._msg("MODE {0} {1}".format(nick, mode))
 
     def join(self, channel):
         self._msg("JOIN {0}".format(channel))
@@ -62,20 +61,51 @@ class IrcProtocol:
     def part(self, channel, message="Leaving"):
         self._msg("PART {0} {1}".format(channel, message))
 
-    def quit(self, quit_msg='Quitting'):
+    def quit(self, quit_msg="Quitting"):
         self._msg("QUIT :{0}".format(quit_msg))
 
-    def register(self):
-        self.privmsg("NICKSERV", "REGISTER {0} {1}".format(self.config['owner_email'], self.config['pass']))
+    def register(self, owner_email, password):
+        self.privmsg("NICKSERV", "REGISTER {0} {1}".format(owner_email, password))
 
-    def identify(self):
-        self.privmsg("NICKSERV", "IDENTIFY {0}".format(self.config['pass']))
+    def identify(self, password):
+        self.privmsg("NICKSERV", "IDENTIFY {0}".format(password))
 
-    def privmsg_ping(self, destination):
-        # self.waitingforpong = True, then in loop if self, etc to time
-        time = str(timestamp())
-        msg = "\x01PING {0} {1}\x01".format(time[:10], time[10:])
+    def ping(self, destination, timestamp):
+        msg = self.wrap_ctcp("PING")
         self.privmsg(destination, msg)
 
-    def notice_ping(self, destination, params):
-        self.notice(destination, "\x01PING {0}\x01".format(params))
+    # Utility Functions
+    def scrub(self, message):
+        return message.translate(None, self.invalid_chars)
+
+    def split_message(self, message):
+        prefix, commands, params = None, None, None
+
+        if message[0] == ':':
+            prefix, msg = message.split(' ', 1)
+
+            if ' ' in msg:
+                command, params = msg.split(' ', 1)
+            else:
+                command = msg
+        else:
+            command, params = message.split(' ', 1)
+
+        return prefix, command, params
+
+    def parse_prefix(self, prefix):
+        sender, ident = None, None
+
+        if prefix is not None:
+            if '!' in prefix:
+                sender = prefix.split('!')[0][1:]
+                ident = prefix.split('!')[1]
+
+                if '@' in ident:
+                    ident = ident.split('@')[1]
+            else:
+                sender = prefix
+                ident = prefix
+
+        return sender, ident
+
