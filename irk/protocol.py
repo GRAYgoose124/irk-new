@@ -14,7 +14,6 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import re
 import logging
-import datetime
 import string
 
 
@@ -26,11 +25,12 @@ class IrcProtocol:
         in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
     def __init__(self):
         self.sock = None
-
         self.invalid_chars = string.maketrans(string.ascii_lowercase, ' ' * len(string.ascii_lowercase))
 
-    def _msg(self, message):
+    def _msg(self, message, limit=512):
         """ Send a basic IRC message over the socket."""
+        if len(message) >= (limit - 2):
+            message = message[:limit - 2]
         self.sock.send("{0}\r\n".format(message))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
         print message
@@ -78,6 +78,7 @@ class IrcProtocol:
     def scrub(self, message):
         return message.translate(None, self.invalid_chars)
 
+    # Todo: Rename params to message
     def split_message(self, message):
         prefix, commands, params = None, None, None
 
@@ -94,7 +95,7 @@ class IrcProtocol:
         return prefix, command, params
 
     def parse_prefix(self, prefix):
-        sender, ident = None, None
+        sender, user, ident = None, None, None
 
         if prefix is not None:
             if '!' in prefix:
@@ -102,10 +103,9 @@ class IrcProtocol:
                 ident = prefix.split('!')[1]
 
                 if '@' in ident:
-                    ident = ident.split('@')[1]
+                    user, ident = ident.split('@')
             else:
                 sender = prefix
                 ident = prefix
 
         return sender, ident
-

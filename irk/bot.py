@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class IrcBot(IrcClient, PluginManager):
     def __init__(self, home_directory):
+        # Put it in the user's home if the path is ambiguous.
         if os.path.isabs(home_directory):
             self.home_directory = home_directory
         else:
@@ -41,44 +42,57 @@ class IrcBot(IrcClient, PluginManager):
         IrcClient.__init__(self, self.home_directory)
         PluginManager.__init__(self, self.plugins_folder)
 
+        # TODO: API Documentation of IrcBot built-in commands
+        self.command_dict = {
+            'quit': self.quit,
+            'reconnect': self.reconnect,
+            'join': self.bot_join,
+            'part': self.bot_part,
+            'load': self.bot_plugin_load
+         }
+
     # Process all PRIVMSG related events, these hooks
     def process_privmsg_events(self, data):
         # TODO: More robust 'login'/privilege system
         if data['sender'] == self.config['owner']:
-
+            # IRC channels are usually prefixed with '#'
+            # This assumption may be invalid, but I don't care at the moment.
             if data['orig_dest'][0] == '#':
                 data['to_channel'] = True
             else:
                 data['to_channel'] = False
 
-            if data['command'] == '!quit':
-                self.quit()
+            # TODO: Commands are restricted right now, no spaces allowed.
+            command = None
+            if data['command'] == self.config['nick']:
+                command = data['command'] + data['argument'][0]
 
-            elif data['command'] == '!join':
-                if str(data['arguments'][0])[0] == '#':
-                    self.join(str(data['arguments'][0]))
 
-            elif data['command'] == '!part':
-                if str(data['arguments'][0])[0] == '#':
-                    self.part(str(data['arguments'][0]))
+            self.command_dict.get(command, self.run_privmsg_hooks)(data)
 
-            elif data['command'] == '!load':
-                if self.load_plugin(str(data['arguments'][0])) is not None:
-                    self.send_results(data)
-
-            elif data['command'] == '!reload':
-                if self.reload_plugin(str(data['arguments'][0])) is not None:
-                    self.send_results(data)
-
-            # Run all PRIVMSG event hooks from plugins.
-            self.run_privmsg_hooks(data)
-
-            if data['command'][0] == '!':
-                logger.debug("{0} ran {1}".format(data['sender'], data['command']))
-
-    # TODO: Make this more intelligent
-    def send_results(self, data):
-        if data['orig_dest'] != self.config['nick']:
-            self.privmsg(data['orig_dest'], "{} loaded.".format(data['arguments'][0]))
+    # TODO: Make more intelligent. This should be documented in API
+    # Plugin Handler Functions
+    def send_results(self, message, original_sender, destination=None):
+        if destination[0] == '#' :
+            self.privmsg(destination, message)
         else:
-            self.privmsg(data['sender'], "{} loaded.".format(data['arguments'][0]))
+            self.privmsg(original_sender, message)
+
+    # Built-in Bot commands TODO: Add to API
+    def reconnect(self):
+        self.quit()
+        self.stop()
+        self.start()
+
+    def bot_join(self, data):
+        if str(data['arguments'][0])[0] == '#':
+            self.join(str(data['arguments'][0]))
+
+    def bot_part(self, data):
+        if str(data['arguments'][0])[0] == '#':
+            self.part(str(data['arguments'][0]))
+
+    def bot_plugin_load(self, data):
+        plugin_name = str(data['arguments'][0])
+        if self.load_plugin_file(plugin_name) is not None:
+            self.send_results(" ".join((plugin_name, "loaded.")), data['sender'], data['orig_dest'])

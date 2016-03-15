@@ -18,7 +18,7 @@ import logging
 from bot import IrcBot
 
 
-logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(name)s:%(lineno)s | %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='[%(levelname)7s] %(name)8s:%(lineno)3s | %(message)s')
 logger = logging.getLogger(__name__)
 
 

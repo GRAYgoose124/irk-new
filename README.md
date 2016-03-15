@@ -41,9 +41,17 @@ Refer to the LICENSE file before using Irk.
 ### BUGS
 
 ## TODO (IN PROGRESS)
+* TOP TODO
+  * Plugin overhaul - make it import packages or files and multiple functions/global imports
+    * Allow plugin interaction
+    * Plugin packages with global imports
+  * Factoids
+  * Permissions
+
 * Bug fixes
   * Check all file loading. (filenames, paths, etc)
 * Plugins
+  * Make Plugins either Single File or Packages
   * Ideas
     * IRC Logging by server/channel
     * Reddit Plugin

@@ -1,3 +1,18 @@
+#   Irk: irc bot
+#   Copyright (C) 2016  Grayson Miller
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU Affero General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU Affero General Public License for more details.
+#
+#   You should have received a copy of the GNU Affero General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import os
 import imp
 import logging
@@ -5,81 +20,62 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Plugin API data packet.
+# data['sender']
+# data['ident']
+# data['orig_dest']
+# data['command']
+# data['arguments']
+# data['to_channel']
+
 
 # TODO: Merge reused code and be verbose about plugin syntax errors.
-class PluginManager:
+# TODO: Fix dumb load, load whole packages, etc
+class PluginManager():
     def __init__(self, folder_name):
         self.plugins = []
+        self.plugin_folder = None
         self.load_plugin_folder(folder_name)
 
     def load_plugin_folder(self, folder_name):
-        plugin = None
         self.plugin_folder = folder_name
 
         if os.path.isabs(folder_name):
             for (_, _, filenames) in os.walk(folder_name):
                 for filename in filenames:
                     plugin_name, file_ext = os.path.splitext(filename)
-                    python_file = os.path.join(folder_name, filename)
-
                     if file_ext == ".py":
-                        try:
-                            plugin = imp.load_source(plugin_name, python_file)
-                        except:
-                            plugin = None
-
-                    if plugin:
-                        if hasattr(plugin, plugin_name):
-                            plugin_instance = getattr(plugin, plugin_name)()
-
-                            if plugin_instance:
-                                self.plugins.append(plugin_instance)
-                                logger.info("Plugin %s loaded.", plugin_name)
-
-                        plugin = None
-
+                        self.load_plugin_file(plugin_name)
         else:
             raise ValueError("Not an absolute pathname!")
 
         logger.debug("Loaded plugins: %s", self.plugins)
 
-    def load_plugin(self, plugin_name):
+    def load_plugin_file(self, plugin_name):
         plugin = None
         python_file = os.path.join(self.plugin_folder, plugin_name + ".py")
 
         if os.path.isfile(python_file):
             try:
                 plugin = imp.load_source(plugin_name, python_file)
-            except:
+            except Exception as e:
+                logger.warning(repr(e))
                 plugin = None
 
             if plugin:
-                self.plugins.append(getattr(plugin, plugin_name)())
+                loaded_plugin = getattr(plugin, plugin_name)()
+                for p in self.plugins:
+                    if loaded_plugin.__class__.__name__ == p.__class__.__name__:
+                        self.plugins.remove(p)
+
+                self.plugins.append(loaded_plugin)
+
                 logger.debug("Plugin %s loaded.", plugin_name)
-                plugin = self.plugins[len(self.plugins)]
-
-        return plugin
-
-    def reload_plugin(self, plugin_name):
-        plugin = None
-        for idx, plugin in enumerate(self.plugins):
-            if plugin.__class__.__name__ == plugin_name:
-                python_file = os.path.join(self.plugin_folder, plugin_name + ".py")
-
-                if os.path.isfile(python_file):
-                    try:
-                        plugin = imp.load_source(plugin_name, python_file)
-                    except:
-                        plugin = None
-
-                    if plugin:
-                        self.plugins[idx] = getattr(plugin, plugin_name)()
-                        logger.debug("Plugin %s reloaded.", plugin_name)
-                        plugin = self.plugins[idx]
 
         return plugin
 
     # TODO ADD hooks for all types of messages + parallelize, add to API
+    # All Plugin Hooks
     def run_privmsg_hooks(self, data):
         for plugin in self.plugins:
             if hasattr(plugin, 'privmsg_hook'):

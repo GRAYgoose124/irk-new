@@ -26,7 +26,7 @@ from protocol import IrcProtocol
 
 logger = logging.getLogger(__name__)
 
-
+# TODO: Document API Client config
 required_irc_config = {
     'host': 'irc.foonetic.net', 'port': 7001, 'ipv6': False,
     'nick': '', 'pass': '',
@@ -35,7 +35,6 @@ required_irc_config = {
     'owner': '', 'owner_email': '',
     'channels': []
  }
-import datetime
 
 # TODO Sort into channels/queries in client or bot? buffer? log it.
 class IrcClient(IrcProtocol):
@@ -47,6 +46,8 @@ class IrcClient(IrcProtocol):
 
         if self.config is None:
             raise ValueError("Configuration file error.")
+
+        self.irc_command_dict = {}
 
     def start(self):
         self._init_socket()
@@ -95,7 +96,7 @@ class IrcClient(IrcProtocol):
 
         self.sock.close()
 
-     # TODO: Put commands in table/dict/hash O(n) search structure.
+     # TODO: Put commands in dict
     def _process_message(self, message):
         """Process IRC messages."""
         # Prefix check and simple parse
@@ -107,7 +108,7 @@ class IrcClient(IrcProtocol):
                 logger.debug("Malformed PRIVMSG: %s", message)
                 return
 
-            # Process PRIVMSG data packet.
+            # Process PRIVMSG data packet. # TODO: No dict, just rename variables well?
             tokens = params.split(' ')
             data = { 'sender': sender,
                      'ident': ident,
@@ -124,6 +125,8 @@ class IrcClient(IrcProtocol):
                 logger.debug('Missing CTCP command %s', data['command'])
 
             # Run all plugins which provide a command_hook()
+            # TODO: Instead of running all plugins add an API variable for command
+            # then just run it if it's the valid command.
             self.process_privmsg_events(data)
 
         elif command == 'NOTICE':
@@ -195,9 +198,7 @@ class IrcClient(IrcProtocol):
 
         return config
 
-    # Available Plugin Hooks
+    # Implemented by IrcBot class, because this handles all bot commands.
     def process_privmsg_events(self, data):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "process_privmsg_hooks()"))
-
-
 
