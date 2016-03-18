@@ -44,55 +44,47 @@ class IrcBot(IrcClient, PluginManager):
 
         # TODO: API Documentation of IrcBot built-in commands
         self.command_dict = {
-            'quit': self.quit,
-            'reconnect': self.reconnect,
-            'join': self.bot_join,
-            'part': self.bot_part,
-            'load': self.bot_plugin_load
+            'quit': self.__quit,
+            'reconnect': self.__reconnect,
+            'join': self.__join,
+            'part': self.__part,
+            'load': self.__plugin_load
          }
 
-    # Process all PRIVMSG related events, these hooks
-    def process_privmsg_events(self, data):
+    # Process all PRIVMSG related events and run all hooks.
+    def _process_privmsg_events(self, data):
         # TODO: More robust 'login'/privilege system
         if data['sender'] == self.config['owner']:
-            # IRC channels are usually prefixed with '#'
-            # This assumption may be invalid, but I don't care at the moment.
-            if data['orig_dest'][0] == '#':
-                data['to_channel'] = True
-            else:
-                data['to_channel'] = False
 
             # TODO: Commands are restricted right now, no spaces allowed.
-            command = None
-            if data['command'] == self.config['nick']:
-                command = data['command'] + data['argument'][0]
+            self.command_dict.get(data['command'], self._privmsg_hooks)(data)
 
-
-            self.command_dict.get(command, self.run_privmsg_hooks)(data)
-
-    # TODO: Make more intelligent. This should be documented in API
+    # TODO: Make more intelligent. This should be documented in Plugin API (Handler Functions)
     # Plugin Handler Functions
-    def send_results(self, message, original_sender, destination=None):
-        if destination[0] == '#' :
+    def send_response(self, message, original_sender, destination=None):
+        if destination[0] == '#':
             self.privmsg(destination, message)
         else:
             self.privmsg(original_sender, message)
 
-    # Built-in Bot commands TODO: Add to API
-    def reconnect(self):
+    # Built-in Bot commands TODO: Add to User API (Bot Commands)
+    def __reconnect(self, data):
         self.quit()
         self.stop()
         self.start()
 
-    def bot_join(self, data):
+    def __quit(self, data):
+        self.quit("Quitting on command!")
+
+    def __join(self, data):
         if str(data['arguments'][0])[0] == '#':
             self.join(str(data['arguments'][0]))
 
-    def bot_part(self, data):
+    def __part(self, data):
         if str(data['arguments'][0])[0] == '#':
             self.part(str(data['arguments'][0]))
 
-    def bot_plugin_load(self, data):
+    def __plugin_load(self, data):
         plugin_name = str(data['arguments'][0])
         if self.load_plugin_file(plugin_name) is not None:
-            self.send_results(" ".join((plugin_name, "loaded.")), data['sender'], data['orig_dest'])
+            self.send_response(" ".join((plugin_name, "loaded.")), data['sender'], data['orig_dest'])

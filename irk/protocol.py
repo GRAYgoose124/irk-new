@@ -27,7 +27,7 @@ class IrcProtocol:
         self.sock = None
         self.invalid_chars = string.maketrans(string.ascii_lowercase, ' ' * len(string.ascii_lowercase))
 
-    def _msg(self, message, limit=512):
+    def __msg(self, message, limit=512):
         """ Send a basic IRC message over the socket."""
         if len(message) >= (limit - 2):
             message = message[:limit - 2]
@@ -39,30 +39,30 @@ class IrcProtocol:
         return "\x01{0}\x01".format(message)
 
     def notice(self, destination, message):
-        self._msg("NOTICE {0} :{1}".format(destination, message))
+        self.__msg("NOTICE {0} :{1}".format(destination, message))
 
     def privmsg(self, destination, message):
         if message is "" or message is None:
             return
-        self._msg("PRIVMSG {0} :{1}".format(destination, message))
+        self.__msg("PRIVMSG {0} :{1}".format(destination, message))
 
     def nick(self, nick):
-        self._msg("NICK {0}".format(nick))
+        self.__msg("NICK {0}".format(nick))
 
     def user(self, user, unused, owner):
-        self._msg("USER {0} {1} {2} {3}".format(user, 0, unused, owner))
+        self.__msg("USER {0} {1} {2} {3}".format(user, 0, unused, owner))
 
     def mode(self, nick, mode):
-        self._msg("MODE {0} {1}".format(nick, mode))
+        self.__msg("MODE {0} {1}".format(nick, mode))
 
     def join(self, channel):
-        self._msg("JOIN {0}".format(channel))
+        self.__msg("JOIN {0}".format(channel))
 
     def part(self, channel, message="Leaving"):
-        self._msg("PART {0} {1}".format(channel, message))
+        self.__msg("PART {0} {1}".format(channel, message))
 
     def quit(self, quit_msg="Quitting"):
-        self._msg("QUIT :{0}".format(quit_msg))
+        self.__msg("QUIT :{0}".format(quit_msg))
 
     def register(self, owner_email, password):
         self.privmsg("NICKSERV", "REGISTER {0} {1}".format(owner_email, password))
@@ -75,6 +75,8 @@ class IrcProtocol:
         self.privmsg(destination, msg)
 
     # Utility Functions
+    def server_pong(self, string):
+        self.__msg("PONG {0}".format(string))
     def scrub(self, message):
         return message.translate(None, self.invalid_chars)
 

@@ -11,8 +11,8 @@ Refer to the LICENSE file before using Irk.
 
 ## INSTALLING & RUNNING
 ### Requirements for unit testing
-* `nose`   
-    
+* `nose`
+
 ### Testing from source root using unit tests. (no install)
 `$ nosetests --nocapture`
 
@@ -45,8 +45,8 @@ Refer to the LICENSE file before using Irk.
   * Plugin overhaul - make it import packages or files and multiple functions/global imports
     * Allow plugin interaction
     * Plugin packages with global imports
+    * Permissions
   * Factoids
-  * Permissions
 
 * Bug fixes
   * Check all file loading. (filenames, paths, etc)

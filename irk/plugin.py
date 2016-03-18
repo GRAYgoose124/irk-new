@@ -74,9 +74,12 @@ class PluginManager():
 
         return plugin
 
-    # TODO ADD hooks for all types of messages + parallelize, add to API
+    def load_plugin_package(self):
+        pass
+
+    # TODO ADD hooks for all types of messages + parallelize, add to Plugin API (Hooks)
     # All Plugin Hooks
-    def run_privmsg_hooks(self, data):
+    def _privmsg_hooks(self, data):
         for plugin in self.plugins:
             if hasattr(plugin, 'privmsg_hook'):
                 logging.debug("Running %s.privmsg_hook()", plugin.__class__.__name__)

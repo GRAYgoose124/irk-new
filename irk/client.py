@@ -108,7 +108,7 @@ class IrcClient(IrcProtocol):
                 logger.debug("Malformed PRIVMSG: %s", message)
                 return
 
-            # Process PRIVMSG data packet. # TODO: No dict, just rename variables well?
+            # Process PRIVMSG data packet.
             tokens = params.split(' ')
             data = { 'sender': sender,
                      'ident': ident,
@@ -127,7 +127,13 @@ class IrcClient(IrcProtocol):
             # Run all plugins which provide a command_hook()
             # TODO: Instead of running all plugins add an API variable for command
             # then just run it if it's the valid command.
-            self.process_privmsg_events(data)
+
+            # That way the plugin can deal with how they are parsed better.
+            if re.match(self.config['nick'] + ".", data['command']):
+                data['command'] = tokens[2]
+                data['arguments'] = tokens[3:]
+
+            self._process_privmsg_events(data)
 
         elif command == 'NOTICE':
             pass
@@ -140,7 +146,7 @@ class IrcClient(IrcProtocol):
 
         # PONG any server PINGs with the same parameters.
         elif command == 'PING':
-            self._msg("PONG {0}".format(params))
+            self.server_pong(params)
 
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
@@ -171,7 +177,7 @@ class IrcClient(IrcProtocol):
         # TODO: Move into function
         for key, value in config.iteritems():
             if value is None or value == '' and key != 'pass':
-                config[key] = str(raw_input(''.join(key, '>')))
+                config[key] = str(raw_input(''.join((key, '> '))))
                 changed = True
 
             elif key == 'pass' and value == '':
@@ -199,6 +205,6 @@ class IrcClient(IrcProtocol):
         return config
 
     # Implemented by IrcBot class, because this handles all bot commands.
-    def process_privmsg_events(self, data):
+    def _process_privmsg_events(self, data):
         raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "process_privmsg_hooks()"))
 
