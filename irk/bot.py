@@ -19,7 +19,6 @@ import os
 from plugin import PluginManager
 from client import IrcClient
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,20 +41,20 @@ class IrcBot(IrcClient, PluginManager):
         IrcClient.__init__(self, self.home_directory)
         PluginManager.__init__(self, self.plugins_folder)
 
-        # TODO: API Documentation of IrcBot built-in commands
+        #  IrcBot's built-in commands
         self.command_dict = {
             'quit': self.__quit,
+            'restart': self.__restart,
             'reconnect': self.__reconnect,
             'join': self.__join,
             'part': self.__part,
             'load': self.__plugin_load
-         }
+        }
 
     # Process all PRIVMSG related events and run all hooks.
     def _process_privmsg_events(self, data):
         # TODO: More robust 'login'/privilege system
         if data['sender'] == self.config['owner']:
-
             # TODO: Commands are restricted right now, no spaces allowed.
             self.command_dict.get(data['command'], self._privmsg_hooks)(data)
 
@@ -69,12 +68,17 @@ class IrcBot(IrcClient, PluginManager):
 
     # Built-in Bot commands TODO: Add to User API (Bot Commands)
     def __reconnect(self, data):
+        logging.debug(data)
         self.quit()
         self.stop()
         self.start()
 
     def __quit(self, data):
+        logging.debug(data)
         self.quit("Quitting on command!")
+
+    def __restart(self, data):
+        pass
 
     def __join(self, data):
         if str(data['arguments'][0])[0] == '#':

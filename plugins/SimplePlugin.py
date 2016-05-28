@@ -18,22 +18,24 @@
 # data['sender']
 # data['ident']
 # data['orig_dest']
-# data['command'] #TODO: combine command+arguments
+# data['command']
 # data['arguments]
 
 
 # TODO: Document API, use this plugin as API example.
-# TODO: Turn into entire package plugin system
 class SimplePlugin:
     def __init__(self):
         return
 
+    # TODO: Make a base plugin class to derive from?
     def privmsg_hook(self, handler, data):
         if data['command'] != 'echo':
             return
 
-        response = " ".join(data['arguments'])
-
-        # TODO: Add to API helper functions?
-
-        handler.send_response(response, data['sender'], data['orig_dest'])
+        if data['arguments'][0][0] == '#':
+            response = " ".join(data['arguments'][1:])
+            channel = data['arguments'][0]
+            handler.send_response(response, data['sender'], channel)
+        else:
+            response = " ".join(data['arguments'])
+            handler.send_response(response, data['sender'], data['orig_dest'])

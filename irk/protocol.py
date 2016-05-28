@@ -25,15 +25,15 @@ class IrcProtocol:
         in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
     def __init__(self):
         self.sock = None
-        self.invalid_chars = string.maketrans(string.ascii_lowercase, ' ' * len(string.ascii_lowercase))
+        self.invalid_chars = bytes.maketrans(bytes(string.ascii_lowercase, 'ascii'), b' ' * len(string.ascii_lowercase))
 
     def __msg(self, message, limit=512):
         """ Send a basic IRC message over the socket."""
         if len(message) >= (limit - 2):
             message = message[:limit - 2]
-        self.sock.send("{0}\r\n".format(message))
+        self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
-        print message
+        print(message)
 
     def wrap_ctcp(self, message):
         return "\x01{0}\x01".format(message)

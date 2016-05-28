@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#   Irk: irc bot 
+#   Irk: irc bot
 #   Copyright (C) 2016  Grayson Miller
 #
 #   This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ config = {
     'url': 'https://github.com/GRAYgoose124/irk',
     'download_url': 'git@github.com:GRAYgoose124/irk.git',
     'author_email': 'grayson.miller124@gmail.com',
-    'version': '0.3b',
+    'version': '0.3c',
     'packages': ['irk'],
     'entry_points': {
         'console_scripts': [

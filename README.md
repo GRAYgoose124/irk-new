@@ -1,7 +1,7 @@
 ## IRK: IRC Bot
 
 ### ABOUT
-Just your average IRC bot written in python.    
+Just your average IRC bot written in python (3.4.3, to be updated to 3.5.1)   
 Written by Grayson Miller.       
                             
 ### LICENSE
@@ -23,14 +23,15 @@ Refer to the LICENSE file before using Irk.
 
 ### Running after installation.
 `$ irk`   
-(`CTRL+C` to safely quit or send the `!quit` command)
+(`CTRL+C` to safely quit or send the `quit` command)
                                      
 ### Uninstalling
 `$ pip uninstall irk`                                
 
 
 ## PROJECT STATUS
-* Version 0.3b
+* Version 0.3c
+  * Updated to Python 3. (3.4.3)
 
 ### FEATURES
 
@@ -46,8 +47,8 @@ Refer to the LICENSE file before using Irk.
     * Allow plugin interaction
     * Plugin packages with global imports
     * Permissions
-  * Factoids
-
+    * Fix handlers, make more event-based
+  * Fix private(__), protected(_), etc
 * Bug fixes
   * Check all file loading. (filenames, paths, etc)
 * Plugins
@@ -55,6 +56,7 @@ Refer to the LICENSE file before using Irk.
   * Ideas
     * IRC Logging by server/channel
     * Reddit Plugin
+    * Factoids
   * Permissions (General?)
   * Cross-Plugin Interaction
   * Threading?
@@ -65,3 +67,5 @@ Refer to the LICENSE file before using Irk.
 * Proper Debug Logging
 * Housecleaning
   * Documentation / API / Comments
+  
+

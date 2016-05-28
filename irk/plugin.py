@@ -20,18 +20,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Plugin API data packet.
-# data['sender']
-# data['ident']
-# data['orig_dest']
-# data['command']
-# data['arguments']
-# data['to_channel']
-
 
 # TODO: Merge reused code and be verbose about plugin syntax errors.
 # TODO: Fix dumb load, load whole packages, etc
-class PluginManager():
+class PluginManager:
     def __init__(self, folder_name):
         self.plugins = []
         self.plugin_folder = None
@@ -70,7 +62,10 @@ class PluginManager():
 
                 self.plugins.append(loaded_plugin)
 
+                logger.debug("%s", loaded_plugin)
                 logger.debug("Plugin %s loaded.", plugin_name)
+            else:
+                logger.debug("Failed to load: %s", plugin)
 
         return plugin
 
