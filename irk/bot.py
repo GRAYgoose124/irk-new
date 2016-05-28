@@ -16,30 +16,32 @@
 import logging
 import os
 
-from plugin import PluginManager
-from client import IrcClient
+from irk.plugin import PluginManager
+from irk.client import IrcClient
 
 logger = logging.getLogger(__name__)
 
 
-class IrcBot(IrcClient, PluginManager):
-    def __init__(self, home_directory):
+# Note: Why is the position of PluginManager/IrcClient important?
+class IrcBot(PluginManager, IrcClient):
+    def __init__(self, home_dir):
         # Put it in the user's home if the path is ambiguous.
-        if os.path.isabs(home_directory):
-            self.home_directory = home_directory
+        home_folder = None
+        if os.path.isabs(home_dir):
+            home_folder = home_dir
         else:
-            self.home_directory = os.path.join(os.path.expanduser('~'), home_directory)
+            home_folder = os.path.join(os.path.expanduser('~'), home_dir)
 
-        self.plugins_folder = os.path.join(self.home_directory, "plugins")
+        plugins_folder = os.path.join(home_folder, "plugins")
 
         # TODO: Do proper file checks and creation.
-        if not os.path.isdir(self.home_directory):
-            os.makedirs(self.plugins_folder)
-        elif not os.path.isdir(self.plugins_folder):
-            os.mkdir(self.plugins_folder)
+        if not os.path.isdir(home_folder):
+            os.makedirs(plugins_folder)
+        elif not os.path.isdir(plugins_folder):
+            os.mkdir(plugins_folder)
 
-        IrcClient.__init__(self, self.home_directory)
-        PluginManager.__init__(self, self.plugins_folder)
+        IrcClient.__init__(self, home_folder)
+        PluginManager.__init__(self, plugins_folder)
 
         #  IrcBot's built-in commands
         self.command_dict = {

@@ -16,14 +16,18 @@ import re
 import logging
 import string
 
+from PyQt5 import QtCore
 
 logger = logging.getLogger(__name__)
 
 
-class IrcProtocol:
+class IrcProtocol(QtCore.QObject):
     """ This class defines functions to send messages over the IRC protocol
         in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
+    chat_update = QtCore.pyqtSignal(str)
     def __init__(self):
+        QtCore.QObject.__init__(self)
+
         self.sock = None
         self.invalid_chars = bytes.maketrans(bytes(string.ascii_lowercase, 'ascii'), b' ' * len(string.ascii_lowercase))
 
@@ -31,9 +35,11 @@ class IrcProtocol:
         """ Send a basic IRC message over the socket."""
         if len(message) >= (limit - 2):
             message = message[:limit - 2]
+
         self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
         message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
-        print(message)
+
+        self.chat_update.emit(message)
 
     def wrap_ctcp(self, message):
         return "\x01{0}\x01".format(message)

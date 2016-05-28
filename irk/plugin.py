@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 class PluginManager:
     def __init__(self, folder_name):
         self.plugins = []
-        self.plugin_folder = None
-        self.load_plugin_folder(folder_name)
+        self.plugins_folder = None
+        self.load_plugins_folder(folder_name)
 
-    def load_plugin_folder(self, folder_name):
-        self.plugin_folder = folder_name
+    def load_plugins_folder(self, folder_name):
+        self.plugins_folder = folder_name
 
         if os.path.isabs(folder_name):
             for (_, _, filenames) in os.walk(folder_name):
@@ -45,7 +45,7 @@ class PluginManager:
 
     def load_plugin_file(self, plugin_name):
         plugin = None
-        python_file = os.path.join(self.plugin_folder, plugin_name + ".py")
+        python_file = os.path.join(self.plugins_folder, plugin_name + ".py")
 
         if os.path.isfile(python_file):
             try:

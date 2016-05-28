@@ -21,7 +21,9 @@ import os
 import json
 import getpass
 
-from protocol import IrcProtocol
+from PyQt5 import QtCore
+
+from irk.protocol import IrcProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +148,9 @@ class IrcClient(IrcProtocol):
         elif command == 'PING':
             self.server_pong(params)
 
+        elif command == 'JOIN':
+            self.chat_update.emit("Joined " + params + ".")
+            return
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
             self.mode(self.config['nick'], self.config['mode'])
@@ -162,7 +167,8 @@ class IrcClient(IrcProtocol):
 
         else:
             logger.debug("Missing IRC command: %s (%s)", command, params)
-        print(message)
+
+        self.chat_update.emit(message)
 
 
     # TODO: Clean this up, make sure it's valid

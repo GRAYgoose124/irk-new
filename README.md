@@ -10,8 +10,9 @@ Refer to the LICENSE file before using Irk.
 
 
 ## INSTALLING & RUNNING
-### Requirements for unit testing
-* `nose`
+### Requirements 
+* `nose` for unit testing
+* `PyQt5` for GUI, at the moment this is mandatory. It is planned to be optional (cli flag).
 
 ### Testing from source root using unit tests. (no install)
 `$ nosetests --nocapture`
@@ -30,7 +31,7 @@ Refer to the LICENSE file before using Irk.
 
 
 ## PROJECT STATUS
-* Version 0.3c
+* Version 0.0.4
   * Updated to Python 3. (3.4.3)
 
 ### FEATURES
@@ -43,6 +44,9 @@ Refer to the LICENSE file before using Irk.
 
 ## TODO (IN PROGRESS)
 * TOP TODO
+  * Expand GUI to have multiple tabs (per channel + main debug tab)
+    * Each channel tab should have a user list 
+  * Implement GUI input
   * Plugin overhaul - make it import packages or files and multiple functions/global imports
     * Allow plugin interaction
     * Plugin packages with global imports
