@@ -42,6 +42,8 @@ required_irc_config = {
 class IrcClient(IrcProtocol):
     def __init__(self, directory):
         IrcProtocol.__init__(self)
+        
+        self.sock = None
 
         config_filename = os.path.join(directory, "config")
         self.config = self._init_config(config_filename)
@@ -64,11 +66,16 @@ class IrcClient(IrcProtocol):
         self.nick(self.config['nick'])
         self.user(self.config['user'], self.config['unused'], self.config['owner'])
 
-        self._loop()
+        self.recv_thread = QtCore.QThread()
+        self.recv_thread.run = self._loop
+        self.__quit_state = False
+        self.recv_thread.start()
 
     def stop(self):
-        self.quit()
-        self.sock.close()
+        if self.sock is not None:
+            self.quit()
+            self.__quit_state = True
+            self.recv_thread.deleteLater()
 
     def _init_socket(self):
         if self.config['ipv6']:
@@ -82,8 +89,9 @@ class IrcClient(IrcProtocol):
     # TODO: Thread receive loop? Thread plugins? Thread send?
     def _loop(self):
         """Transmit/Receive loop"""
-        while True:
-            data = self.sock.recv(2048)
+        while not self.__quit_state:
+            if self.sock is not None:
+                data = self.sock.recv(2048)
 
             if not data:
                 logger.info("No more data... Connection closed.")
@@ -95,7 +103,8 @@ class IrcClient(IrcProtocol):
                 if message:
                     self._process_message(message)
 
-        self.sock.close()
+        if self.sock is not None:
+            self.sock.close()
 
         # TODO: Put commands in dict
 
@@ -148,9 +157,6 @@ class IrcClient(IrcProtocol):
         elif command == 'PING':
             self.server_pong(params)
 
-        elif command == 'JOIN':
-            self.chat_update.emit("Joined " + params + ".")
-            return
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
             self.mode(self.config['nick'], self.config['mode'])

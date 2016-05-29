@@ -44,9 +44,11 @@ Refer to the LICENSE file before using Irk.
 
 ## TODO (IN PROGRESS)
 * TOP TODO
+  * Plugin Overhaul with QThreads. Interaction using signals/slots...etc
   * Expand GUI to have multiple tabs (per channel + main debug tab)
     * Each channel tab should have a user list 
   * Implement GUI input
+  * GUI config select
   * Plugin overhaul - make it import packages or files and multiple functions/global imports
     * Allow plugin interaction
     * Plugin packages with global imports

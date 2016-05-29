@@ -36,10 +36,13 @@ class IrcProtocol(QtCore.QObject):
         if len(message) >= (limit - 2):
             message = message[:limit - 2]
 
-        self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
-        message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
+        if self.sock is not None:
+            self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
+            message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
 
-        self.chat_update.emit(message)
+            self.chat_update.emit(message)
+        else:
+            logger.debug("Tried to send message without a socket! message(%s)", message)
 
     def wrap_ctcp(self, message):
         return "\x01{0}\x01".format(message)

@@ -20,7 +20,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
+# TODO: QThread this, use slots/signals to communicate to other plugins/bot
 # TODO: Merge reused code and be verbose about plugin syntax errors.
 # TODO: Fix dumb load, load whole packages, etc
 class PluginManager:

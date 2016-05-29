@@ -24,13 +24,13 @@ logger = logging.getLogger(__name__)
 
 # Note: Why is the position of PluginManager/IrcClient important?
 class IrcBot(PluginManager, IrcClient):
-    def __init__(self, home_dir):
+    def __init__(self, home_directory):
         # Put it in the user's home if the path is ambiguous.
         home_folder = None
-        if os.path.isabs(home_dir):
-            home_folder = home_dir
+        if os.path.isabs(home_directory):
+            home_folder = home_directory
         else:
-            home_folder = os.path.join(os.path.expanduser('~'), home_dir)
+            home_folder = os.path.join(os.path.expanduser('~'), home_directory)
 
         plugins_folder = os.path.join(home_folder, "plugins")
 
