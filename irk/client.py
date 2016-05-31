@@ -29,13 +29,14 @@ logger = logging.getLogger(__name__)
 
 # See docs/IrcClientAPI for configuration format information.
 basic_irc_config = {
-    'host': 'irc.foonetic.net', 'port': 7001, 'ipv6': False,
+    'host': '', 'port': 7001, 'ipv6': False,
     'nick': '', 'pass': '',
     'ident': '', 'user': '',
     'mode': '+B', 'unused': '*',
     'owner': '', 'owner_email': '',
     'channels': []
 }
+
 
 def init_irc_config(config_file):
     if not os.path.exists(config_file):
@@ -45,7 +46,6 @@ def init_irc_config(config_file):
     changed = False
     config = json.load(open(config_file, 'r'))
 
-    # TODO: Move into function
     for key, value in config.items():
         if value is None or value == '' and key != 'pass':
             config[key] = str(input(''.join((key, '> '))))
@@ -130,6 +130,10 @@ class IrcClient(QtCore.QObject):
         self.sock = ssl.wrap_socket(sock)
         self.sock.connect((self.config['host'], int(self.config['port'])))
 
+        logger.debug(self.sock)
+
+
+
     def __loop(self):
         """Transmit/Receive loop"""
         while self.sock is not None:
@@ -145,7 +149,6 @@ class IrcClient(QtCore.QObject):
             for message in messages:
                 if message:
                     self.__process_message(message)
-
 
     def send_response(self, message, original_sender=None, destination=None):
         if destination is not None and destination[0] == '#':
@@ -188,15 +191,15 @@ class IrcClient(QtCore.QObject):
             privmsg_command = tokens[1][1:]
             arguments = tokens[2:]
             data_packet = {'sender': sender,
-                    'ident': ident,
-                    'original_destination': original_destination,
-                    'message': privmsg_command + " " + " ".join(tokens[2:])
-                    }
+                           'ident': ident,
+                           'original_destination': original_destination,
+                           'message': privmsg_command + " " + " ".join(tokens[2:])}
 
             # CTCP PRIVMSGs
             if privmsg_command == '\x01PING':
                 time_stamp_copy = " ".join((arguments[0], arguments[1][:-1]))
-                self.send_message(IrcProtocol.notice(data_packet['sender'], IrcProtocol.wrap_ctcp(" ".join(("PING", format(time_stamp_copy))))))
+                self.send_message(IrcProtocol.notice(data_packet['sender'],
+                                                     IrcProtocol.wrap_ctcp(" ".join(("PING", format(time_stamp_copy))))))
             elif privmsg_command[0] == '\x01':
                 logger.debug('Missing CTCP command %s', privmsg_command)
 
@@ -209,6 +212,10 @@ class IrcClient(QtCore.QObject):
             self.joined_channels.append(parameters[1:])
             self.channel_joined.emit(parameters[1:])
             logger.info("Joined channel: %s", self.joined_channels)
+
+        elif command == 'PART':
+            if sender == self.config['nick']:
+                self.channel_part.emit(parameters.split(" ")[0])
 
         # Auto-join servers after MODE received from NickServ.
         elif command == 'MODE':
@@ -226,12 +233,14 @@ class IrcClient(QtCore.QObject):
 
         # Identify yourself when connection is ready.
         elif command == '376':
-            if self.config['nick'] != '':
+            if self.config['nick'] != '' and self.config['nick'][0] != '_':
                 self.send_message(IrcProtocol.identify(self.config['pass']))
 
         elif command == '433':
-            if re.match("Nickname is already in use", parameters):
+            if re.search("Nickname is already in use", parameters):
                 self.config['nick'] = "_{}".format(self.config['nick'])
+                self.send_message(IrcProtocol.nick(self.config['nick']))
+                self.send_message(IrcProtocol.user(self.config['user'], self.config['unused'], self.config['owner']))
                 self.send_message(IrcProtocol.mode(self.config['nick'], self.config['mode']))
 
         else:

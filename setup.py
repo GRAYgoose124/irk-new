@@ -29,7 +29,8 @@ config = {
         'console_scripts': [
             'irk = irk.__main__:main'
         ]
-    }
+     },
+    'requirements': ['nose']
 }
 
 setup(**config)

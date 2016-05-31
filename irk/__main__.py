@@ -17,9 +17,9 @@ import sys
 import logging
 from PyQt5 import QtCore, QtWidgets
 
-from irk_window import Ui_MainWindow
-from bot import IrcBot
-from protocol import IrcProtocol
+from irk.irk_window import Ui_MainWindow
+from irk.bot import IrcBot
+from irk.protocol import IrcProtocol
 
 logging.basicConfig(level=logging.DEBUG, format='[%(levelname)7s] %(name)8s:%(lineno)3s | %(message)s')
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ class IrcBotThread(QtCore.QThread):
         super(IrcBotThread, self).terminate()
 
 
+# noinspection PyArgumentList
 class IrkWindow(QtWidgets.QMainWindow):
     def __init__(self, root_directory, parent=None):
         super(IrkWindow, self).__init__(parent)
@@ -89,21 +90,23 @@ class IrkWindow(QtWidgets.QMainWindow):
                     command = packet[0]
 
                     # TODO: Fix this. Hacking bot input together...
-                    data = { 'sender': None,
-                             'original_destination': None,
-                             'message': self.client_thread.client.config['nick'] + ": " + message }
+                    data = {'sender': None,
+                            'original_destination': None,
+                            'message': message[1:]}
 
                     if command in self.client_thread.client.command_dict:
+
                         self.client_thread.client.command_dict[command](data)
                 else:
-                    self.client_thread.client.send_message(IrcProtocol.privmsg(self.ui.ChannelList.currentItem().text(), message))
+                    self.client_thread.client.send_message(IrcProtocol.privmsg(self.ui.ChannelList.currentItem().text(),
+                                                                               message))
             self.ui.inputArea.clear()
-
 
     @QtCore.pyqtSlot()
     def quit(self):
         self.client_thread.terminate()
         QtCore.QCoreApplication.instance().quit()
+
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

@@ -3,4 +3,5 @@
 bin/*
 dist/*
 build/*
+.idea/*
 irk.egg-info/*

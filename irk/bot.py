@@ -10,24 +10,25 @@
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #   GNU Affero General Public License for more details.
-#
+#g
 #   You should have received a copy of the GNU Affero General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import logging
 import os
 import re
+import time
 from PyQt5 import QtCore
 
-from plugin import PluginManager
-from client import IrcClient, init_irc_config
-from protocol import IrcProtocol
+from irk.plugin import PluginManager
+from irk.client import IrcClient, init_irc_config
+from irk.protocol import IrcProtocol
 
 logger = logging.getLogger(__name__)
+
 
 # Note: Why is the position of PluginManager/IrcClient important?
 class IrcBot(PluginManager, IrcClient):
     def __init__(self, root_directory, config_filename="config"):
-        home_folder = None
         if os.path.isabs(root_directory):
             home_folder = root_directory
         else:
@@ -67,6 +68,7 @@ class IrcBot(PluginManager, IrcClient):
         if data['sender'] == self.config['owner']:
             if re.match(self.config['nick'] + "[:,]", data['message']):
                 tokens = data['message'].split(' ')
+                data['message'] = ' '.join(tokens[1:])
                 logger.debug("Command caught: (%s) : (%s)", tokens[1], tokens[2:])
                 self.command_dict.get(tokens[1], self.__noop)(data)
 
@@ -79,9 +81,9 @@ class IrcBot(PluginManager, IrcClient):
 
     # Built-in Bot commands
     def __reconnect(self, data):
+        # TODO: When client is stopped...so is client_thread...fix.
         if self.sock is not None:
             self.stop()
-            self.sock = None
         self.start()
 
     def __quit(self, data):
@@ -92,27 +94,25 @@ class IrcBot(PluginManager, IrcClient):
 
     # TODO: reformat data['message']...Currently inserting bot name from ui input to hack the interface together..
     def __join(self, data):
-        print(data)
-        channel = data['message'].split(" ")[2]
+        channel = data['message'].split(" ")[1]
         if channel[0] == '#':
             self.send_message(IrcProtocol.join(channel))
 
     def __part(self, data):
-        channel = data['message'].split(" ")[2]
+        channel = data['message'].split(" ")[1]
         if channel[0] == '#':
             # TODO: Fix to make Duckborg parted.
-            self.channel_part.emit(channel)
             self.send_message(IrcProtocol.part(channel))
 
     def __plugin_load(self, data):
-        plugin_name = data['message'].split(" ")[2]
+        plugin_name = data['message'].split(" ")[1]
         if self.load_plugin_file(plugin_name) is not None:
             self.send_response(" ".join((plugin_name, "loaded.")), data['sender'], data['original_destination'])
 
     def __command_help(self, data):
         command_list = ""
         for k, v in self.command_dict.items():
-            command_list = command_list + " " + k
+            command_list = command_list + ", " + k
 
         if data['original_destination'] is not None:
             self.send_response(command_list, None, data['original_destination'])
@@ -121,6 +121,6 @@ class IrcBot(PluginManager, IrcClient):
         else:
             self.message_received.emit(command_list)
 
-
-    def __noop(self, data):
+    @staticmethod
+    def __noop(data):
         logger.debug("Noop ran: %s", data)

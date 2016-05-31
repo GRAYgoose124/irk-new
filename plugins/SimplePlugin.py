@@ -29,8 +29,7 @@ class SimplePlugin:
 
     # TODO: echo test
     def sample_command(self, data):
-        pass
-        # print("Command World!")
+        print("Command World!")
 
     # TODO: Expose ui to plugins.
     def privmsg_hook(self, data):

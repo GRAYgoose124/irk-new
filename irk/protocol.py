@@ -21,7 +21,7 @@ from PyQt5 import QtCore
 logger = logging.getLogger(__name__)
 
 
-class IrcProtocol():
+class IrcProtocol:
     """ This class defines functions to send messages over the IRC protocol
         in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
     invalid_chars = bytes.maketrans(bytes(string.ascii_lowercase, 'ascii'), b' ' * len(string.ascii_lowercase))
@@ -86,8 +86,8 @@ class IrcProtocol():
 
     # Utility Functions
     @staticmethod
-    def server_pong(string):
-        return "PONG {0}".format(string)
+    def server_pong(message):
+        return "PONG {0}".format(message)
 
     @staticmethod
     def scrub(message):

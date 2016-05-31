@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class PluginManager:
     def __init__(self, folder_name):
         self.plugins = []
@@ -41,6 +42,7 @@ class PluginManager:
             if plugin:
                 loaded_plugin = getattr(plugin, plugin_name)(self)
                 for p in self.plugins:
+                    # TODO: Remove commands from command_dict, not removing completely....
                     if loaded_plugin.__class__.__name__ == p.__class__.__name__:
                         self.plugins.remove(p)
 
