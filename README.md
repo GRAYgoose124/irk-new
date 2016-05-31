@@ -1,16 +1,16 @@
 ## IRK: IRC Bot
 
 ### ABOUT
-Just your average IRC bot written in python (3.4.3, to be updated to 3.5.1)   
-Written by Grayson Miller.       
-                            
+Just your average IRC bot written in python (3.5.1)
+Written by Grayson Miller.
+
 ### LICENSE
 Irk is licensed under the GNU Affero General Public License v3.
-Refer to the LICENSE file before using Irk.   
+Refer to the LICENSE file before using Irk.
 
 
 ## INSTALLING & RUNNING
-### Requirements 
+### Requirements
 * `nose` for unit testing
 * `PyQt5` for GUI, at the moment this is mandatory. It is planned to be optional (cli flag).
 
@@ -18,20 +18,20 @@ Refer to the LICENSE file before using Irk.
 `$ nosetests --nocapture`
 
 ### Installing from CLI. (Please use virtualenv)
-`$ git clone git@github.com:GRAYgoose124/irk.git irk`  
-`$ cd irk`                                           
-`$ python setup.py install`                       
+`$ git clone git@github.com:GRAYgoose124/irk.git irk`
+`$ cd irk`
+`$ python setup.py install`
 
 ### Running after installation.
-`$ irk`   
+`$ irk`
 (`CTRL+C` to safely quit or send the `quit` command)
-                                     
+
 ### Uninstalling
-`$ pip uninstall irk`                                
+`$ pip uninstall irk`
 
 
 ## PROJECT STATUS
-* Version 0.0.4
+* Version 0.0.5
   * Updated to Python 3. (3.4.3)
 
 ### FEATURES
@@ -44,10 +44,9 @@ Refer to the LICENSE file before using Irk.
 
 ## TODO (IN PROGRESS)
 * TOP TODO
-  * Plugin Overhaul with QThreads. Interaction using signals/slots...etc
+  * Plugin UI interface
   * Expand GUI to have multiple tabs (per channel + main debug tab)
-    * Each channel tab should have a user list 
-  * Implement GUI input
+    * Each channel tab should have a user list
   * GUI config select
   * Plugin overhaul - make it import packages or files and multiple functions/global imports
     * Allow plugin interaction
@@ -73,5 +72,5 @@ Refer to the LICENSE file before using Irk.
 * Proper Debug Logging
 * Housecleaning
   * Documentation / API / Comments
-  
+* Fix logging, using debug for things that shouuldn't be...etc
 

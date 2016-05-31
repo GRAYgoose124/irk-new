@@ -17,25 +17,26 @@
 #
 # data['sender']
 # data['ident']
-# data['orig_dest']
-# data['command']
-# data['arguments]
+# data['original_destination']
+# data['message']
 
 
 # TODO: Document API, use this plugin as API example.
 class SimplePlugin:
-    def __init__(self):
-        return
+    def __init__(self, handler):
+        self.handler = handler
+        self.handler.command_dict['sample_command'] = self.sample_command
 
-    # TODO: Make a base plugin class to derive from?
-    def privmsg_hook(self, handler, data):
-        if data['command'] != 'echo':
-            return
+    # TODO: echo test
+    def sample_command(self, data):
+        pass
+        # print("Command World!")
 
-        if data['arguments'][0][0] == '#':
-            response = " ".join(data['arguments'][1:])
-            channel = data['arguments'][0]
-            handler.send_response(response, data['sender'], channel)
-        else:
-            response = " ".join(data['arguments'])
-            handler.send_response(response, data['sender'], data['orig_dest'])
+    # TODO: Expose ui to plugins.
+    def privmsg_hook(self, data):
+        pass
+        # print("Hello World!")
+
+        # response = "Hello World!"
+        # channel = "#testgrounds"
+        # self.handler.send_response(response, data['sender'], channel)

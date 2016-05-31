@@ -23,7 +23,7 @@ config = {
     'url': 'https://github.com/GRAYgoose124/irk',
     'download_url': 'git@github.com:GRAYgoose124/irk.git',
     'author_email': 'grayson.miller124@gmail.com',
-    'version': '0.0.4',
+    'version': '0.0.5',
     'packages': ['irk'],
     'entry_points': {
         'console_scripts': [

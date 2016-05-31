@@ -1,0 +1,17 @@
+This is the format of data that the handler passes the plugin.
+data_packet = {
+  `sender`
+  `ident`
+  `original_destination`
+  `message`
+}
+
+# These are the built-in bot commands provided in irk.bot.
+       self.command_dict = {
+            'quit': self.__quit,
+            'restart': self.__restart,
+            'reconnect': self.__reconnect,
+            'join': self.__join,
+            'part': self.__part,
+            'load': self.__plugin_load
+        }

@@ -15,24 +15,26 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>
 import logging
 import os
+import re
+from PyQt5 import QtCore
 
-from irk.plugin import PluginManager
-from irk.client import IrcClient
+from plugin import PluginManager
+from client import IrcClient, init_irc_config
+from protocol import IrcProtocol
 
 logger = logging.getLogger(__name__)
 
-
 # Note: Why is the position of PluginManager/IrcClient important?
 class IrcBot(PluginManager, IrcClient):
-    def __init__(self, home_directory):
-        # Put it in the user's home if the path is ambiguous.
+    def __init__(self, root_directory, config_filename="config"):
         home_folder = None
-        if os.path.isabs(home_directory):
-            home_folder = home_directory
+        if os.path.isabs(root_directory):
+            home_folder = root_directory
         else:
-            home_folder = os.path.join(os.path.expanduser('~'), home_directory)
+            home_folder = os.path.join(os.path.expanduser('~'), root_directory)
 
         plugins_folder = os.path.join(home_folder, "plugins")
+        config_full_filename = os.path.join(home_folder, config_filename)
 
         # TODO: Do proper file checks and creation.
         if not os.path.isdir(home_folder):
@@ -40,57 +42,85 @@ class IrcBot(PluginManager, IrcClient):
         elif not os.path.isdir(plugins_folder):
             os.mkdir(plugins_folder)
 
-        IrcClient.__init__(self, home_folder)
-        PluginManager.__init__(self, plugins_folder)
+        config = init_irc_config(config_full_filename)
 
-        #  IrcBot's built-in commands
+        # IrcBot's built-in commands
         self.command_dict = {
             'quit': self.__quit,
             'restart': self.__restart,
             'reconnect': self.__reconnect,
             'join': self.__join,
             'part': self.__part,
-            'load': self.__plugin_load
+            'load': self.__plugin_load,
+            'help': self.__command_help
         }
 
-    # Process all PRIVMSG related events and run all hooks.
-    def _process_privmsg_events(self, data):
-        # TODO: More robust 'login'/privilege system
+        IrcClient.__init__(self, config)
+        PluginManager.__init__(self, plugins_folder)
+
+        self.privmsg_event.connect(self.process_privmsg_event)
+        self.__connect_plugins_hooks()
+
+    def process_privmsg_event(self, data):
+        # TODO: Command processing, Plugin Hooks
+        logger.debug("Processing PRIVMSG event...\n\t\t%s", data)
         if data['sender'] == self.config['owner']:
-            # TODO: Commands are restricted right now, no spaces allowed.
-            self.command_dict.get(data['command'], self._privmsg_hooks)(data)
+            if re.match(self.config['nick'] + "[:,]", data['message']):
+                tokens = data['message'].split(' ')
+                logger.debug("Command caught: (%s) : (%s)", tokens[1], tokens[2:])
+                self.command_dict.get(tokens[1], self.__noop)(data)
 
-    # TODO: Make more intelligent. This should be documented in Plugin API (Handler Functions)
-    # Plugin Handler Functions
-    def send_response(self, message, original_sender, destination=None):
-        if destination[0] == '#':
-            self.privmsg(destination, message)
-        else:
-            self.privmsg(original_sender, message)
+    def __connect_plugins_hooks(self):
+        for plugin in self.plugins:
+            plugin.handler = self
+            # TODO: Check if plugin has hook first
+            self.privmsg_event.connect(plugin.privmsg_hook)
+        pass
 
-    # Built-in Bot commands TODO: Add to User API (Bot Commands)
+    # Built-in Bot commands
     def __reconnect(self, data):
-        logging.debug(data)
-        self.quit()
-        self.stop()
+        if self.sock is not None:
+            self.stop()
+            self.sock = None
         self.start()
 
     def __quit(self, data):
-        logging.debug(data)
-        self.quit("Quitting on command!")
+        self.send_message(IrcProtocol.quit("Quitting on command!"))
 
     def __restart(self, data):
         pass
 
+    # TODO: reformat data['message']...Currently inserting bot name from ui input to hack the interface together..
     def __join(self, data):
-        if str(data['arguments'][0])[0] == '#':
-            self.join(str(data['arguments'][0]))
+        print(data)
+        channel = data['message'].split(" ")[2]
+        if channel[0] == '#':
+            self.send_message(IrcProtocol.join(channel))
 
     def __part(self, data):
-        if str(data['arguments'][0])[0] == '#':
-            self.part(str(data['arguments'][0]))
+        channel = data['message'].split(" ")[2]
+        if channel[0] == '#':
+            # TODO: Fix to make Duckborg parted.
+            self.channel_part.emit(channel)
+            self.send_message(IrcProtocol.part(channel))
 
     def __plugin_load(self, data):
-        plugin_name = str(data['arguments'][0])
+        plugin_name = data['message'].split(" ")[2]
         if self.load_plugin_file(plugin_name) is not None:
-            self.send_response(" ".join((plugin_name, "loaded.")), data['sender'], data['orig_dest'])
+            self.send_response(" ".join((plugin_name, "loaded.")), data['sender'], data['original_destination'])
+
+    def __command_help(self, data):
+        command_list = ""
+        for k, v in self.command_dict.items():
+            command_list = command_list + " " + k
+
+        if data['original_destination'] is not None:
+            self.send_response(command_list, None, data['original_destination'])
+        elif data['sender'] is not None:
+            self.send_response(command_list, data['sender'])
+        else:
+            self.message_received.emit(command_list)
+
+
+    def __noop(self, data):
+        logger.debug("Noop ran: %s", data)

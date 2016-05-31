@@ -27,8 +27,8 @@ from irk.protocol import IrcProtocol
 
 logger = logging.getLogger(__name__)
 
-# TODO: Document API Client config
-required_irc_config = {
+# See docs/IrcClientAPI for configuration format information.
+basic_irc_config = {
     'host': 'irc.foonetic.net', 'port': 7001, 'ipv6': False,
     'nick': '', 'pass': '',
     'ident': '', 'user': '',
@@ -37,47 +37,91 @@ required_irc_config = {
     'channels': []
 }
 
+def init_irc_config(config_file):
+    if not os.path.exists(config_file):
+        with open(config_file, 'w') as f:
+            json.dump(basic_irc_config, f, indent=2)
 
-# TODO Sort into channels/queries in client or bot? buffer? log it.
-class IrcClient(IrcProtocol):
-    def __init__(self, directory):
-        IrcProtocol.__init__(self)
-        
+    changed = False
+    config = json.load(open(config_file, 'r'))
+
+    # TODO: Move into function
+    for key, value in config.items():
+        if value is None or value == '' and key != 'pass':
+            config[key] = str(input(''.join((key, '> '))))
+            changed = True
+
+        elif key == 'pass' and value == '':
+            config[key] = getpass.getpass("pass: ")
+            changed = True
+
+        elif key == 'channels' and value == []:
+            string = None
+            print("To finish, enter DONE.")
+
+            while string != 'DONE':
+                string = str(input("channel: "))
+                if string[0] == '#':
+                    config[key].append(string)
+            changed = True
+
+    if changed:
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+
+    for key, value in basic_irc_config.items():
+        if key not in config:
+            config = None
+
+    return config
+
+
+class IrcClient(QtCore.QObject):
+    # TODO: Merge these signals?
+    message_sent = QtCore.pyqtSignal(str)
+    message_received = QtCore.pyqtSignal(str)
+
+    channel_joined = QtCore.pyqtSignal(str)
+    channel_part = QtCore.pyqtSignal(str)
+
+    privmsg_event = QtCore.pyqtSignal(dict)
+
+    def __init__(self, config):
+        super(IrcClient, self).__init__()
+
         self.sock = None
-
-        config_filename = os.path.join(directory, "config")
-        self.config = self._init_config(config_filename)
+        self.config = config
 
         if self.config is None:
             raise ValueError("Configuration file error.")
 
-        self.irc_command_dict = {}
+        self.irc_commands = {}
+        self.joined_channels = []
 
     def start(self):
-        self._init_socket()
+        logger.info("Client started.")
+        if self.sock is None:
+            self.__init_socket()
 
-        ssl_info = self.sock.cipher()
-        if ssl_info:
-            logger.info("SSL Cipher (%s), SSL Version (%s), SSL Bits (%s)", *ssl_info)
+            ssl_info = self.sock.cipher()
+            if ssl_info:
+                logger.info("SSL Cipher (%s), SSL Version (%s), SSL Bits (%s)", *ssl_info)
 
-        # IRC RFC2812:3.1 states that a client needs to send a nick and
-        # user message in order to register a connection.
-        # Most servers mandate that the user's real name be the owner.
-        self.nick(self.config['nick'])
-        self.user(self.config['user'], self.config['unused'], self.config['owner'])
+            # IRC RFC2812:3.1 states that a client needs to send a nick and
+            # user message in order to register a connection.
+            # Most servers mandate that the user's real name be the owner.
+            self.send_message(IrcProtocol.nick(self.config['nick']))
+            self.send_message(IrcProtocol.user(self.config['user'], self.config['unused'], self.config['owner']))
 
-        self.recv_thread = QtCore.QThread()
-        self.recv_thread.run = self._loop
-        self.__quit_state = False
-        self.recv_thread.start()
+            self.__loop()
 
     def stop(self):
         if self.sock is not None:
-            self.quit()
-            self.__quit_state = True
-            self.recv_thread.deleteLater()
+            self.send_message(IrcProtocol.quit())
+            self.sock.close()
+            self.sock = None
 
-    def _init_socket(self):
+    def __init_socket(self):
         if self.config['ipv6']:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
         else:
@@ -86,137 +130,109 @@ class IrcClient(IrcProtocol):
         self.sock = ssl.wrap_socket(sock)
         self.sock.connect((self.config['host'], int(self.config['port'])))
 
-    # TODO: Thread receive loop? Thread plugins? Thread send?
-    def _loop(self):
+    def __loop(self):
         """Transmit/Receive loop"""
-        while not self.__quit_state:
-            if self.sock is not None:
-                data = self.sock.recv(2048)
+        while self.sock is not None:
+            data = self.sock.recv(2048)
 
             if not data:
                 logger.info("No more data... Connection closed.")
-                break
+                self.sock.close()
+                self.sock = None
 
             # IRC RFC2812:2.3
             messages = data.split(b'\r\n')
             for message in messages:
                 if message:
-                    self._process_message(message)
+                    self.__process_message(message)
+
+
+    def send_response(self, message, original_sender=None, destination=None):
+        if destination is not None and destination[0] == '#':
+            self.send_message(IrcProtocol.privmsg(destination, message))
+        elif original_sender is not None:
+            self.send_message(IrcProtocol.privmsg(original_sender, message))
+
+    def send_message(self, message, limit=512):
+        """ Send a basic IRC message over the socket."""
+        if len(message) >= (limit - 2):
+            message = message[:limit - 2]
 
         if self.sock is not None:
-            self.sock.close()
+            self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
+            message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
 
-        # TODO: Put commands in dict
+            self.message_sent.emit(message)
+        else:
+            logger.debug("Tried to send message without a socket! message(%s)", message)
+            message = None
 
-    def _process_message(self, message):
+        return message
+
+    # Move commands to dict/funcs/parser class?
+    def __process_message(self, message):
         """Process IRC messages."""
-        # Prefix check and simple parse
         message = message.decode('ascii')
-        prefix, command, params = self.split_message(message)
-        sender, ident = self.parse_prefix(prefix)
+        self.message_received.emit(message)
+
+        prefix, command, parameters = IrcProtocol.split_message(message)
+        sender, user, ident = IrcProtocol.parse_prefix(prefix)
 
         if command == 'PRIVMSG':
             if prefix is None:
                 logger.debug("Malformed PRIVMSG: %s", message)
                 return
 
-            tokens = params.split(' ')
-            data = {'sender': sender,
+            tokens = parameters.split(' ')
+            original_destination = tokens[0]
+            privmsg_command = tokens[1][1:]
+            arguments = tokens[2:]
+            data_packet = {'sender': sender,
                     'ident': ident,
-                    'orig_dest': tokens[0],
-                    'command': tokens[1][1:],
-                    'arguments': tokens[2:]
+                    'original_destination': original_destination,
+                    'message': privmsg_command + " " + " ".join(tokens[2:])
                     }
 
-            # CTCP PRIVMSG
-            if data['command'] == '\x01PING':
-                time_stamp_copy = " ".join((data['arguments'][0], data['arguments'][1][:-1]))
-                self.notice(data['sender'], self.wrap_ctcp(" ".join(("PING", format(time_stamp_copy)))))
-            elif data['command'][0] == '\x01':
-                logger.debug('Missing CTCP command %s', data['command'])
+            # CTCP PRIVMSGs
+            if privmsg_command == '\x01PING':
+                time_stamp_copy = " ".join((arguments[0], arguments[1][:-1]))
+                self.send_message(IrcProtocol.notice(data_packet['sender'], IrcProtocol.wrap_ctcp(" ".join(("PING", format(time_stamp_copy))))))
+            elif privmsg_command[0] == '\x01':
+                logger.debug('Missing CTCP command %s', privmsg_command)
 
-            # TODO: Instead of running all plugins add an API variable for command then
-            # just run it if it's the valid command.
-            # That way the plugin can deal with how they are parsed better.
-            if re.match(self.config['nick'] + "[,:]", data['command']):
-                data['command'] = tokens[2]
-                data['arguments'] = tokens[3:]
-
-            self._process_privmsg_events(data)
+            self.privmsg_event.emit(data_packet)
 
         elif command == 'NOTICE':
             pass
+
+        elif command == 'JOIN':
+            self.joined_channels.append(parameters[1:])
+            self.channel_joined.emit(parameters[1:])
+            logger.info("Joined channel: %s", self.joined_channels)
 
         # Auto-join servers after MODE received from NickServ.
         elif command == 'MODE':
             if prefix.lower() == ':nickserv':
                 for channel in self.config['channels']:
-                    self.join(channel)
+                    self.send_message(IrcProtocol.join(channel))
 
         # PONG any server PINGs with the same parameters.
         elif command == 'PING':
-            self.server_pong(params)
+            self.send_message(IrcProtocol.server_pong(parameters))
 
         # Set the bot's mode on server join after 001 received.
         elif command == '001':
-            self.mode(self.config['nick'], self.config['mode'])
+            self.send_message(IrcProtocol.mode(self.config['nick'], self.config['mode']))
 
         # Identify yourself when connection is ready.
         elif command == '376':
             if self.config['nick'] != '':
-                self.identify(self.config['pass'])
+                self.send_message(IrcProtocol.identify(self.config['pass']))
 
         elif command == '433':
-            if re.match(":Nickname is already in use", params) is not None:
+            if re.match("Nickname is already in use", parameters):
                 self.config['nick'] = "_{}".format(self.config['nick'])
-                self.mode(self.config['nick'], self.config['mode'])
+                self.send_message(IrcProtocol.mode(self.config['nick'], self.config['mode']))
 
         else:
-            logger.debug("Missing IRC command: %s (%s)", command, params)
-
-        self.chat_update.emit(message)
-
-
-    # TODO: Clean this up, make sure it's valid
-    @staticmethod
-    def _init_config(config_file):
-        if not os.path.exists(config_file):
-            with open(config_file, 'w') as f:
-                json.dump(required_irc_config, f, indent=2)
-
-        changed = False
-        config = json.load(open(config_file, 'r'))
-
-        # TODO: Move into function
-        for key, value in config.items():
-            if value is None or value == '' and key != 'pass':
-                config[key] = str(input(''.join((key, '> '))))
-                changed = True
-
-            elif key == 'pass' and value == '':
-                config[key] = getpass.getpass("pass: ")
-                changed = True
-
-            elif key == 'channels' and value == []:
-                string = None
-                print("To finish, enter DONE.")
-
-                while string != 'DONE':
-                    string = str(input("channel: "))
-                    if string[0] == '#':
-                        config[key].append(string)
-                changed = True
-
-        if changed:
-            with open(config_file, 'w') as f:
-                json.dump(config, f, indent=2)
-
-        for key, value in required_irc_config.items():
-            if key not in config:
-                config = None
-
-        return config
-
-    # Implemented by IrcBot class, because this handles all bot commands.
-    def _process_privmsg_events(self, data):
-        raise NotImplementedError("{0}.{1}".format(self.__class__.__name__, "process_privmsg_hooks()"))
+            logger.debug("Missing IRC command: %s (%s)", command, parameters)

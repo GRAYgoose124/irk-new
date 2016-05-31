@@ -9,7 +9,7 @@ def setup():
     #log("Setting up...", self.log 
 
 def teardown():
-    print "Finishing tests..." 
+    print("Finishing tests...")
 
 def test_basic():
     logger.debug("Entering irk.__main__.main()")

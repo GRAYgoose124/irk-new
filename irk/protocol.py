@@ -21,91 +21,96 @@ from PyQt5 import QtCore
 logger = logging.getLogger(__name__)
 
 
-class IrcProtocol(QtCore.QObject):
+class IrcProtocol():
     """ This class defines functions to send messages over the IRC protocol
         in order to make more of a black box. It currently expects self.sock and self.config to be valid.. """
-    chat_update = QtCore.pyqtSignal(str)
+    invalid_chars = bytes.maketrans(bytes(string.ascii_lowercase, 'ascii'), b' ' * len(string.ascii_lowercase))
+
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        return
 
-        self.sock = None
-        self.invalid_chars = bytes.maketrans(bytes(string.ascii_lowercase, 'ascii'), b' ' * len(string.ascii_lowercase))
-
-    def __msg(self, message, limit=512):
-        """ Send a basic IRC message over the socket."""
-        if len(message) >= (limit - 2):
-            message = message[:limit - 2]
-
-        if self.sock is not None:
-            self.sock.send(bytes("{0}\r\n".format(message), 'ascii'))
-            message = re.sub("NICKSERV :(.*) .*", "NICKSERV :\g<1> <password>", message)
-
-            self.chat_update.emit(message)
-        else:
-            logger.debug("Tried to send message without a socket! message(%s)", message)
-
-    def wrap_ctcp(self, message):
+    @staticmethod
+    def wrap_ctcp(message):
         return "\x01{0}\x01".format(message)
 
-    def notice(self, destination, message):
-        self.__msg("NOTICE {0} :{1}".format(destination, message))
+    @staticmethod
+    def notice(destination, message):
+        return "NOTICE {0} :{1}".format(destination, message)
 
-    def privmsg(self, destination, message):
+    @staticmethod
+    def privmsg(destination, message):
         if message is "" or message is None:
-            return
-        self.__msg("PRIVMSG {0} :{1}".format(destination, message))
+            return None
+        return "PRIVMSG {0} :{1}".format(destination, message)
 
-    def nick(self, nick):
-        self.__msg("NICK {0}".format(nick))
+    @staticmethod
+    def nick(nick):
+        return "NICK {0}".format(nick)
 
-    def user(self, user, unused, owner):
-        self.__msg("USER {0} {1} {2} {3}".format(user, 0, unused, owner))
+    @staticmethod
+    def user(user, unused, owner):
+        return "USER {0} {1} {2} {3}".format(user, 0, unused, owner)
 
-    def mode(self, nick, mode):
-        self.__msg("MODE {0} {1}".format(nick, mode))
+    @staticmethod
+    def mode(nick, mode):
+        return "MODE {0} {1}".format(nick, mode)
 
-    def join(self, channel):
-        self.__msg("JOIN {0}".format(channel))
+    @staticmethod
+    def join(channel):
+        return "JOIN {0}".format(channel)
 
-    def part(self, channel, message="Leaving"):
-        self.__msg("PART {0} {1}".format(channel, message))
+    @staticmethod
+    def part(channel, message="Leaving"):
+        return "PART {0} {1}".format(channel, message)
 
-    def quit(self, quit_msg="Quitting"):
-        self.__msg("QUIT :{0}".format(quit_msg))
+    @staticmethod
+    def quit(quit_message="Quitting"):
+        return "QUIT :{0}".format(quit_message)
 
-    def register(self, owner_email, password):
-        self.privmsg("NICKSERV", "REGISTER {0} {1}".format(owner_email, password))
+    # This is a bot, make sure you use your email!
+    @staticmethod
+    def register(owner_email, password):
+        return IrcProtocol.privmsg("NICKSERV",
+                                   "REGISTER {0} {1}".format(owner_email,
+                                                             password))
 
-    def identify(self, password):
-        self.privmsg("NICKSERV", "IDENTIFY {0}".format(password))
+    @staticmethod
+    def identify(password):
+        return IrcProtocol.privmsg("NICKSERV",
+                                   "IDENTIFY {0}".format(password))
 
-    def ping(self, destination, timestamp):
-        msg = self.wrap_ctcp("PING")
-        self.privmsg(destination, msg)
+    @staticmethod
+    def ping(destination, timestamp):
+        message = IrcProtocol.wrap_ctcp("PING")
+        return IrcProtocol.privmsg(destination, message)
 
     # Utility Functions
-    def server_pong(self, string):
-        self.__msg("PONG {0}".format(string))
-    def scrub(self, message):
-        return message.translate(None, self.invalid_chars)
+    @staticmethod
+    def server_pong(string):
+        return "PONG {0}".format(string)
 
-    # Todo: Rename params to message
-    def split_message(self, message):
-        prefix, commands, params = None, None, None
+    @staticmethod
+    def scrub(message):
+        return message.translate(None, IrcProtocol.invalid_chars)
+
+    @staticmethod
+    def split_message(message):
+        prefix, commands, parameters = None, None, None
 
         if message[0] == ':':
             prefix, msg = message.split(' ', 1)
 
             if ' ' in msg:
-                command, params = msg.split(' ', 1)
+                command, parameters = msg.split(' ', 1)
             else:
                 command = msg
         else:
-            command, params = message.split(' ', 1)
+            command, parameters = message.split(' ', 1)
 
-        return prefix, command, params
+        return prefix, command, parameters
 
-    def parse_prefix(self, prefix):
+    @staticmethod
+    def parse_prefix(prefix):
         sender, user, ident = None, None, None
 
         if prefix is not None:
@@ -119,4 +124,4 @@ class IrcProtocol(QtCore.QObject):
                 sender = prefix
                 ident = prefix
 
-        return sender, ident
+        return sender, user, ident

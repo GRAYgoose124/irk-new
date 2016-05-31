@@ -1,0 +1,22 @@
+This is the format of data that the handler passes the plugin.
+data_packet = {
+  `sender`
+  `ident`
+  `original_destination`
+  `message`
+}
+
+
+# irk.client uses this definition to generate a configuration file.
+# These are all the necessary keys along with some default values.
+basic_irc_config = {
+    'host': 'irc.foonetic.net', 'port': 7001,
+    'ipv6': False,
+    'nick': '', 'pass': '',
+    'ident': '', 'user': '',
+    'mode': '+B', 'unused': '*',
+    'owner': '', 'owner_email': '',
+    'channels': []
+ }
+
+
