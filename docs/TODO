@@ -1,0 +1,3 @@
+Clean up logging (standard " X |")
+Make sure event API is standardized. Standardize events, commands, data/event variables
+Document builtin events and parameters
