@@ -34,7 +34,7 @@ def save_config(location, config):
 
 def interactive_build_config(default_config, use_defaults=True):
     """
-    Written with trust. TODO: Complete this.
+    Written with trust. Trust is evil, TODO: fix this.
     """
     config = default_config
     for key in default_config:

@@ -18,10 +18,11 @@ import ssl
 import time
 import re
 import datetime
+import multiprocessing
+import queue
 
 from daemon import Daemon
 from irc import Irc
-
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class Client(Daemon):
         self.users = {}
         self.channels = []
 
+        self.pending = multiprocessing.Queue()
+
         self.irc_events = {
             'PRIVMSG': self._handle_privmsg,
             'NOTICE': self._handle_notice,
@@ -56,6 +59,7 @@ class Client(Daemon):
             '353': self._handle_userlist_update,
             '366': self._qno_handle,
             '376': self._handle_identify,
+            '401': self._no_such_nick,
             '433': self._handle_433,
             'MODE': self._handle_mode,
             'PING': self._handle_server_ping,
@@ -141,14 +145,17 @@ class Client(Daemon):
     def _send_response(self, message, original_sender=None, destination=None):
         """ Sends a response to the correct location, whether a channel or query"""
         if destination is not None and destination[0] == '#' and message is not None:
+            pass
+        elif original_sender is not None and message is not None:
+            destination = original_sender
+        else:
+            destination = None
+
+        if destination is not None:
             msg = Irc.privmsg(destination, message)
             self._send_message(msg)
             self.send_event("send_privmsg", str(message), self.config['nick'], destination)
 
-        elif original_sender is not None and message is not None:
-            msg = Irc.privmsg(original_sender, message)
-            self._send_message(msg)
-            self.send_event("send_privmsg", str(message), self.config['nick'], original_sender)
 
     def _send_message(self, message, limit=512):
         """ Send a basic IRC message over the socket."""
@@ -168,7 +175,7 @@ class Client(Daemon):
 
     def _process_message(self, message):
         """Process IRC messages."""
-        message = message.decode('ascii')
+        message = message.decode('utf-8')
         # self.send_event("recv", message)
 
         _, command, _ = Irc.split_message(message)
@@ -195,13 +202,20 @@ class Client(Daemon):
             return
 
         tokens = parameters.split(' ')
-        privmsg_command = tokens[1][1:]
-
-        message = privmsg_command + " " + " ".join(tokens[2:])
+        # Handles the case of ": <text>". Someone started their message with a space.
+        if tokens[1] == ':':
+            privmsg_command = tokens[2]
+            message = "{} {}".format(privmsg_command, " ".join(tokens[2:]))
+        else:
+            privmsg_command = tokens[1][1:]
+            message = "{} {}".format(privmsg_command, " ".join(tokens[2:]))
 
         # CTCP PRIVMSGs
         if privmsg_command == '\x01PING':
             self._send_message(Irc.ctcp_pong(sender, message))
+
+        if privmsg_command == '\x01ACTION':
+            pass
 
         elif privmsg_command[0] == '\x01':
             logger.debug('Missing CTCP command %s', privmsg_command)
@@ -219,6 +233,18 @@ class Client(Daemon):
             user, ident, host = Irc.split_prefix(prefix)
 
             self.send_event("pong", str(time_taken), user)
+
+    def _no_such_nick(self, message):
+        try:
+            p_query = self.pending.get_nowait()
+        except queue.Empty:
+            p_query = None
+            return
+
+        if p_query[0] is not None:
+            self._send_response("{}: '{}' is not a nick.".format(p_query[0], p_query[1]), p_query[2])
+        else:
+            logger.error("No such nick error: {}, {}".format(message, p_query))
 
     def _set_mode(self, message):
         self._send_message(Irc.mode(self.config['nick'], self.config['mode']))
@@ -298,18 +324,9 @@ class Client(Daemon):
         sender = data[0][1]
 
         try:
-            channel = message.split(" ")[2]
-            if channel[0] != '#':
-                channel = None
-        except IndexError:
-            channel = None
-
-        try:
-            user = message.split(" ")[2]
-        except IndexError:
-            user = None
-            self._send_response("Command: ping <user>", sender, channel)
-            return
+            user = message.split(" ")[1]
+        except:
+            self._send_response("Command: ping <user>", sender)
 
         unix_timestamp = str(time.time()).replace(".", " ")
         self._send_message(Irc.ctcp_ping(user, unix_timestamp))
@@ -324,7 +341,7 @@ class Client(Daemon):
             destination = data[0][2]
 
 
-        channel = message.split(" ")[2]
+        channel = message.split(" ")[1]
         if channel[0] == '#':
             self._send_response("Joining {}".format(channel), destination)
             self._send_message(Irc.join(channel))
@@ -337,7 +354,7 @@ class Client(Daemon):
         if data[0][2][0] == '#':
             destination = data[0][2]
 
-        channel = message.split(" ")[2]
+        channel = message.split(" ")[1]
         if channel[0] == '#':
             self._send_response("Parting {}".format(channel), destination)
             self._send_message(Irc.part(channel, "Parting :)"))

@@ -30,18 +30,19 @@ class Bf(Plugin):
 
     def bf(self, *data):
         # TODO: Complete
+        print(data)
         if data[2][0] == '#':
             destination = data[2]
         else:
             destination = data[1]
 
         try:
-            code_string = data[0].split(" ")[2]
+            code_string = data[0].split(" ")[1]
         except IndexError:
             self.send_message("Get it right if you're gonna try.", destination)
 
         try:
-            input_string = data[0].split(" ", 3)[3]
+            input_string = data[0].split(" ", 2)[2]
         except IndexError:
             input_string = ""
 

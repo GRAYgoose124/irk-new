@@ -69,10 +69,14 @@ class Bot(Daemon):
         }
         self.channels = {}
 
+    def init_loop(self):
+        logger.info("Bot started.")
+
     def cleanup_loop(self):
         self.event_handler(("stop", ()))
 
     def do(self):
+        #TODO: Event driven framework?
         time.sleep(0.01)
 
     def event_handler(self, event):
@@ -129,14 +133,20 @@ class Bot(Daemon):
         self.send_event("send_response", "Loaded plugins: {}".format([i for i in self.plugin_manager.plugins.keys()]), destination)
 
     def _plugin_reload(self, data):
-        self._plugin_unload(data)
-        self._plugin_load(data)
+        try:
+            plugin_name = data[0].split(" ")[2]
+        except IndexError:
+            plugin_name = None
+
+        if plugin_name in self.plugin_manager.plugins:
+            self._plugin_unload(data)
+            self._plugin_load(data)
 
     def _plugin_unload(self, data):
         try:
             plugin_name = data[0].split(" ")[2]
         except IndexError:
-            plugin_name = None
+            return
 
         if data[2][0] == '#':
             destination = data[2]
@@ -155,7 +165,7 @@ class Bot(Daemon):
         try:
             plugin_name = data[0].split(" ")[2]
         except IndexError:
-            plugin_name = None
+            return
 
         if data[2][0] == '#':
             destination = data[2]
@@ -187,27 +197,32 @@ class Bot(Daemon):
         event_type, data = event
         message = data[0]
         sender = data[1]
+        destination = data[2]
 
-        if data[2] is not None:
-            if data[2][0] == '#':
-                destination = data[2]
+        tokens = message.split(" ")
+
+        prefix, command, message = None, None, None
+        if len(tokens) == 1:
+            command = tokens[0]
+        elif len(tokens) == 2:
+            command, message = tokens
+        elif len(tokens) >= 3:
+            prefix = tokens[0]
+            if not re.search("{}[:,]?".format(self.config['name']), prefix):
+                command, *message = tokens
             else:
-                destination = data[1]
+                command, *message = tokens[1:]
 
-        try:
-            prefix, command = message.split(" ", 1)
-        except ValueError:
-            prefix = None
-            command = None
-
-        try:
-            command, message = command.split(" ", 1)
-        except (ValueError, AttributeError):
-            message = ""
+        if destination[0] == '#' and prefix is None:
+            command, message = message, ""
+            prefix = self.config['name']
 
         # TODO: Proper authentication
         if command is not None:
-            if sender in self.config['authorized_users'] and re.search("{}[:,]?".format(self.config['name']), prefix):
+            if sender in self.config['authorized_users']:
+                if prefix is None and destination != self.config['name']:
+                    return
+
                 if command in self.builtin_commands:
                     logger.debug("CMD | {}: {}".format(command, message))
                     self.builtin_commands.get(command, self._null_command)(data)
@@ -241,7 +256,7 @@ class Bot(Daemon):
 
     def _part_event(self, event):
         event_type, data = event
-        self.channels[data[0]] = None
+        # self.channels.pop(data[0])
 
     def _send_privmsg_event(self, event):
         pass

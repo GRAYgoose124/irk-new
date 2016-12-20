@@ -36,14 +36,14 @@ class Daemon(multiprocessing.Process):
         self.input_queue = multiprocessing.Queue()
         self.output_queue = None
 
-    # Events TODO: expand to multi-connection? Plugins are piggy backing.
+    # Events TODO: expand to multi-connection? Plugins are piggy backing. proper pickling and piping
     def connect_queues(self, d2):
         self.output_queue = d2.input_queue
         d2.output_queue = self.input_queue
 
     def send_event(self, etype, *data):
-        logger.log(level=5, msg="{}: Sending event: {}".format(self.__class__, (etype, data)))
-        packet = pickle.dumps((etype, data))
+        logger.log(level=5, msg="{}: Sending event: {}".format(self.__class__, [etype, data]))
+        packet = pickle.dumps([etype, data])
         self.output_queue.put(packet)
 
     def process_events(self):

@@ -1,3 +1,6 @@
 Clean up logging (standard " X |")
-Make sure event API is standardized. Standardize events, commands, data/event variables
+***flatten API tuples (event_type, *data) document data + Make sure event API is standardized. Standardize events, commands, data/event variables
 Document builtin events and parameters
+***normalize all data + util functions (in daemon, eventinterface?)
+link to source code on bot command
+pickled pipes between different threads / safety?
