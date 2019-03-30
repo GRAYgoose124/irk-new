@@ -9,7 +9,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-# noinspection PyArgumentList,PyArgumentList,PyArgumentList,PyArgumentList,PyArgumentList,PyArgumentList,PyArgumentList,PyArgumentList
+# noinspection PyArgumentList
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")

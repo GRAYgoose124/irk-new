@@ -49,7 +49,6 @@ class IrcBot(PluginManager, IrcClient):
         self.command_dict = {
             'quit': self.__quit,
             'restart': self.__restart,
-            'reconnect': self.__reconnect,
             'join': self.__join,
             'part': self.__part,
             'load': self.__plugin_load,
@@ -80,17 +79,12 @@ class IrcBot(PluginManager, IrcClient):
         pass
 
     # Built-in Bot commands
-    def __reconnect(self, data):
-        # TODO: When client is stopped...so is client_thread...fix.
-        if self.sock is not None:
-            self.stop()
-        self.start()
-
     def __quit(self, data):
         self.send_message(IrcProtocol.quit("Quitting on command!"))
 
     def __restart(self, data):
-        pass
+        self.stop()
+        self.start()
 
     # TODO: reformat data['message']...Currently inserting bot name from ui input to hack the interface together..
     def __join(self, data):

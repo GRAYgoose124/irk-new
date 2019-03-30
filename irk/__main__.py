@@ -53,7 +53,7 @@ class IrkWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.ui.QuitButton.clicked.connect(self.quit)
         self.ui.StartButton.clicked.connect(self.client_thread.start)
-        self.ui.StopButton.clicked.connect(self.client_thread.terminate)
+        self.ui.StopButton.clicked.connect(self.stop)
 
         self.client_thread.client.message_received.connect(self.ui.ChatArea.append)
         self.client_thread.client.message_sent.connect(self.ui.ChatArea.append)
@@ -106,6 +106,11 @@ class IrkWindow(QtWidgets.QMainWindow):
     def quit(self):
         self.client_thread.terminate()
         QtCore.QCoreApplication.instance().quit()
+
+    @QtCore.pyqtSlot()
+    def stop(self):
+        self.ui.ChannelList.clear()
+        self.client_thread.terminate()
 
 
 def main():

@@ -101,7 +101,7 @@ class IrcClient(QtCore.QObject):
     def start(self):
         logger.info("Client started.")
         if self.sock is None:
-            self.__init_socket()
+            self._init_socket()
 
             ssl_info = self.sock.cipher()
             if ssl_info:
@@ -121,25 +121,30 @@ class IrcClient(QtCore.QObject):
             self.sock.close()
             self.sock = None
 
-    def __init_socket(self):
+    def _init_socket(self):
         if self.config['ipv6']:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
         else:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        self.sock = ssl.wrap_socket(sock)
-        self.sock.connect((self.config['host'], int(self.config['port'])))
+        if sock is not None:
+            self.sock = ssl.wrap_socket(sock)
+            self.sock.connect((self.config['host'], int(self.config['port'])))
+        else:
+            self._init_socket()
+
 
         logger.debug(self.sock)
-
 
 
     def __loop(self):
         """Transmit/Receive loop"""
         while self.sock is not None:
-            data = self.sock.recv(2048)
-
-            if not data:
+            try:
+                # TODO: Major glitch...can't stop/restart correctly.
+                data = self.sock.recv(2048)
+            except:
+                logger.error(data)
                 logger.info("No more data... Connection closed.")
                 self.sock.close()
                 self.sock = None
@@ -149,6 +154,8 @@ class IrcClient(QtCore.QObject):
             for message in messages:
                 if message:
                     self.__process_message(message)
+
+
 
     def send_response(self, message, original_sender=None, destination=None):
         if destination is not None and destination[0] == '#':
